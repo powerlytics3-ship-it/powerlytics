@@ -1,0 +1,483 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum WorkspaceKind {
+  ORGANIZATION
+  PERSONAL
+}
+
+enum WorkspaceStatus {
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  REMOVED
+}
+
+enum Role {
+  SUPER_ADMIN
+  ENGINEERING_ADMIN
+  MANUFACTURER
+  WORKSPACE_ADMIN
+  OPERATOR
+  VIEWER
+}
+
+enum PortCategory {
+  INPUT
+  OUTPUT
+}
+
+enum PortValueFormat {
+  ANALOG
+  DIGITAL
+  MODBUS
+  AC_INPUT
+}
+
+enum ModelVersionStatus {
+  DRAFT
+  PUBLISHED
+  DEPRECATED
+}
+
+enum DeviceLifecycleStatus {
+  MANUFACTURED
+  IN_INVENTORY
+  ASSIGNED_TO_WORKSPACE
+  INSTALLED
+  COMMISSIONING
+  ACTIVE
+  MAINTENANCE
+  SUSPENDED
+  RETIRED
+}
+
+enum DeviceHealthStatus {
+  ONLINE
+  OFFLINE
+  MAINTENANCE
+  DEGRADED
+}
+
+enum DeploymentStatus {
+  PENDING
+  SENT
+  APPLIED
+  ERROR
+  SUPERSEDED
+}
+
+enum AlertSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AlertIncidentStatus {
+  NEW
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+enum ActuationStatus {
+  PENDING_APPROVAL
+  PENDING
+  SENT
+  ACKNOWLEDGED
+  FAILED
+  CANCELLED
+  EXPIRED
+}
+
+model User {
+  id             String       @id @default(cuid())
+  externalSub    String?      @unique
+  email          String       @unique
+  name           String
+  phone          String?
+  active         Boolean      @default(true)
+  lastLoginAt    DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  memberships    Membership[]
+  invitations    Invitation[] @relation("InvitationAcceptedBy")
+  auditLogs       AuditLog[]
+  actuations      ActuationCommand[] @relation("ActuationRequestedBy")
+}
+
+model Workspace {
+  id              String          @id @default(cuid())
+  kind            WorkspaceKind
+  slug            String          @unique
+  displayName     String
+  legalName       String?
+  industry        String?
+  status          WorkspaceStatus @default(ACTIVE)
+  timezone        String          @default("UTC")
+  address         String?
+  supportEmail    String?
+  billingEmail    String?
+  taxId           String?
+  metadata        Json            @default("{}")
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  memberships     Membership[]
+  invitations     Invitation[]
+  devices         Device[]
+  alertRules      AlertRule[]
+  alertIncidents  AlertIncident[]
+  auditLogs       AuditLog[]
+
+  @@index([kind, status])
+}
+
+model Membership {
+  id          String           @id @default(cuid())
+  userId      String
+  workspaceId String
+  role        Role
+  status      MembershipStatus @default(ACTIVE)
+  invitedById String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  user        User             @relation(fields: [userId], references: [id])
+  workspace   Workspace        @relation(fields: [workspaceId], references: [id])
+
+  @@unique([userId, workspaceId])
+  @@index([workspaceId, role, status])
+}
+
+model Invitation {
+  id           String     @id @default(cuid())
+  workspaceId  String
+  email        String
+  role         Role
+  tokenHash    String     @unique
+  expiresAt    DateTime
+  acceptedAt   DateTime?
+  acceptedById String?
+  createdAt    DateTime   @default(now())
+  workspace    Workspace  @relation(fields: [workspaceId], references: [id])
+  acceptedBy   User?      @relation("InvitationAcceptedBy", fields: [acceptedById], references: [id])
+
+  @@index([workspaceId, email])
+}
+
+model PortType {
+  id          String          @id @default(cuid())
+  name        String          @unique
+  codeName    String          @unique
+  category    PortCategory
+  valueFormat PortValueFormat
+  description String?
+  active      Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  modelPorts  DeviceModelPort[]
+  devicePorts DevicePort[]
+}
+
+model DeviceModel {
+  id          String               @id @default(cuid())
+  name        String
+  sku         String               @unique
+  description String?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  versions    DeviceModelVersion[]
+}
+
+model DeviceModelVersion {
+  id                   String             @id @default(cuid())
+  deviceModelId         String
+  version              Int
+  status               ModelVersionStatus @default(DRAFT)
+  microControllerType  String
+  hardwareRevision     String?
+  firmwareFamily       String?
+  publishedAt          DateTime?
+  deprecatedAt         DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  model                DeviceModel        @relation(fields: [deviceModelId], references: [id])
+  ports                DeviceModelPort[]
+  devices              Device[]
+
+  @@unique([deviceModelId, version])
+}
+
+model DeviceModelPort {
+  id                  String             @id @default(cuid())
+  deviceModelVersionId String
+  portTypeId           String
+  portKey              String
+  microControllerPin   String?
+  description          String?
+  modelVersion         DeviceModelVersion @relation(fields: [deviceModelVersionId], references: [id])
+  portType             PortType           @relation(fields: [portTypeId], references: [id])
+
+  @@unique([deviceModelVersionId, portKey])
+}
+
+model Device {
+  id                    String                @id @default(cuid())
+  configId              String                @unique
+  imei                  String                @unique
+  serialNumber          String?               @unique
+  batchNumber           String?
+  manufactureDate       DateTime?
+  name                  String
+  deviceModelVersionId  String
+  workspaceId           String?
+  lifecycleStatus       DeviceLifecycleStatus @default(MANUFACTURED)
+  healthStatus          DeviceHealthStatus    @default(OFFLINE)
+  firmwareVersion       String?
+  hardwareRevision      String?
+  lastSeenAt            DateTime?
+  locationLat           Float?
+  locationLng           Float?
+  locationAddress       String?
+  pointOfContact        String?
+  alertEmails           String[]              @default([])
+  alertPhones           String[]              @default([])
+  metadata              Json                  @default("{}")
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  modelVersion          DeviceModelVersion    @relation(fields: [deviceModelVersionId], references: [id])
+  workspace             Workspace?            @relation(fields: [workspaceId], references: [id])
+  ports                 DevicePort[]
+  credentials           DeviceCredential[]
+  deployments           ConfigDeployment[]
+  telemetryValues       TelemetryValue[]
+  alertIncidents        AlertIncident[]
+  actuations            ActuationCommand[]
+  lifecycleEvents       DeviceLifecycleEvent[]
+
+  @@index([workspaceId, lifecycleStatus])
+  @@index([deviceModelVersionId])
+}
+
+model DevicePort {
+  id                 String          @id @default(cuid())
+  deviceId           String
+  portTypeId         String
+  portKey            String
+  name               String
+  unit               String?
+  scaling            Float           @default(1)
+  offset             Float           @default(0)
+  status             String          @default("INACTIVE")
+  thresholdMin       Float?
+  thresholdMax       Float?
+  thresholdMessage   String?
+  device             Device          @relation(fields: [deviceId], references: [id])
+  portType           PortType        @relation(fields: [portTypeId], references: [id])
+  modbusSlaves       ModbusSlave[]
+  telemetryValues    TelemetryValue[]
+
+  @@unique([deviceId, portKey])
+}
+
+model ModbusSlave {
+  id          String       @id @default(cuid())
+  devicePortId String
+  slaveId     String
+  portKey     String
+  name        String
+  baudRate    Int
+  dataBits    Int
+  stopBits    Float
+  parity      String
+  intervalMs  Int
+  timeoutMs   Int
+  retries     Int
+  devicePort  DevicePort   @relation(fields: [devicePortId], references: [id])
+  reads       ModbusRead[]
+
+  @@unique([devicePortId, slaveId])
+}
+
+model ModbusRead {
+  id            String       @id @default(cuid())
+  modbusSlaveId String
+  readId        String       @unique
+  portKey       String
+  registerType  String?
+  functionCode  String
+  startAddress  Int
+  bitsToRead    Int
+  name          String
+  description   String?
+  scaling       Float        @default(1)
+  offset        Float        @default(0)
+  unit          String?
+  tag           String?
+  dataType      String?
+  endianness    String       @default("NONE")
+  modbusSlave   ModbusSlave  @relation(fields: [modbusSlaveId], references: [id])
+}
+
+model DeviceCredential {
+  id            String    @id @default(cuid())
+  deviceId      String
+  label         String
+  keyHash       String
+  active        Boolean   @default(true)
+  lastUsedAt    DateTime?
+  rotatedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  device        Device    @relation(fields: [deviceId], references: [id])
+
+  @@index([deviceId, active])
+}
+
+model ConfigDeployment {
+  id          String           @id @default(cuid())
+  deviceId    String
+  configId    String
+  configHash  String
+  payload     Json
+  status      DeploymentStatus @default(PENDING)
+  message     String?
+  sentAt      DateTime?
+  appliedAt   DateTime?
+  createdAt   DateTime         @default(now())
+  device      Device           @relation(fields: [deviceId], references: [id])
+
+  @@index([deviceId, createdAt])
+}
+
+model TelemetryValue {
+  id              String    @id @default(cuid())
+  ts              DateTime
+  ingestTs        DateTime  @default(now())
+  workspaceId     String
+  deviceId        String
+  devicePortId    String?
+  portKey         String
+  portType        String
+  readId          String?
+  slaveId         String?
+  rawValue        Json
+  calibratedValue Json?
+  unit            String?
+  quality         String    @default("good")
+  rawPayload      Json?
+  parsedValue     Float?
+  rawRegisters    String[]  @default([])
+  bitsToRead      Int?
+  endianness      String?
+  device          Device    @relation(fields: [deviceId], references: [id])
+  devicePort      DevicePort? @relation(fields: [devicePortId], references: [id])
+
+  @@index([deviceId, ts])
+  @@index([workspaceId, ts])
+  @@index([deviceId, portKey, ts])
+  @@index([deviceId, readId, ts])
+}
+
+model AlertRule {
+  id              String        @id @default(cuid())
+  workspaceId     String
+  deviceId        String?
+  portKey         String?
+  readId          String?
+  comparator      String
+  threshold       Float
+  durationSeconds Int           @default(0)
+  severity        AlertSeverity
+  message         String
+  active          Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  workspace       Workspace     @relation(fields: [workspaceId], references: [id])
+  incidents       AlertIncident[]
+}
+
+model AlertIncident {
+  id             String              @id @default(cuid())
+  workspaceId    String
+  deviceId       String?
+  alertRuleId    String?
+  triggeredAt    DateTime            @default(now())
+  value          Json?
+  message        String
+  severity       AlertSeverity
+  status         AlertIncidentStatus @default(NEW)
+  acknowledgedAt DateTime?
+  resolvedAt     DateTime?
+  sentTo         Json                @default("{}")
+  workspace      Workspace           @relation(fields: [workspaceId], references: [id])
+  device         Device?             @relation(fields: [deviceId], references: [id])
+  alertRule      AlertRule?          @relation(fields: [alertRuleId], references: [id])
+
+  @@index([workspaceId, status, triggeredAt])
+}
+
+model ActuationCommand {
+  id             String          @id @default(cuid())
+  workspaceId    String
+  deviceId       String
+  requestedById  String
+  portKey        String
+  command        String
+  requestedValue Json
+  reason         String
+  status         ActuationStatus @default(PENDING)
+  idempotencyKey String
+  sentAt         DateTime?
+  acknowledgedAt DateTime?
+  failedAt       DateTime?
+  failureMessage String?
+  createdAt      DateTime        @default(now())
+  device         Device          @relation(fields: [deviceId], references: [id])
+  requestedBy    User            @relation("ActuationRequestedBy", fields: [requestedById], references: [id])
+
+  @@unique([deviceId, idempotencyKey])
+  @@index([workspaceId, createdAt])
+}
+
+model DeviceLifecycleEvent {
+  id          String    @id @default(cuid())
+  deviceId    String
+  fromStatus  DeviceLifecycleStatus?
+  toStatus    DeviceLifecycleStatus
+  reason      String?
+  actorUserId String?
+  createdAt   DateTime @default(now())
+  device      Device    @relation(fields: [deviceId], references: [id])
+
+  @@index([deviceId, createdAt])
+}
+
+model AuditLog {
+  id          String     @id @default(cuid())
+  workspaceId String?
+  userId      String?
+  action      String
+  resource    String
+  resourceId  String?
+  reason      String?
+  ipAddress   String?
+  userAgent   String?
+  metadata    Json       @default("{}")
+  createdAt   DateTime   @default(now())
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+  user        User?      @relation(fields: [userId], references: [id])
+
+  @@index([workspaceId, createdAt])
+  @@index([resource, resourceId])
+}

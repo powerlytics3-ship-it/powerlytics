@@ -1,0 +1,29 @@
+{
+  "name": "powerlytic",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Production-grade rebuild of the Powerlytic industrial IoT platform.",
+  "packageManager": "pnpm@9.15.4",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "typecheck": "turbo typecheck",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md,css,yml,yaml}\"",
+    "db:generate": "pnpm --filter @powerlytic/db db:generate",
+    "db:migrate": "pnpm --filter @powerlytic/db db:migrate",
+    "db:seed": "pnpm --filter @powerlytic/db db:seed"
+  },
+  "devDependencies": {
+    "@powerlytic/config": "workspace:*",
+    "prettier": "^3.5.3",
+    "turbo": "^2.4.4",
+    "typescript": "^5.8.2"
+  },
+  "pnpm": {
+    "overrides": {
+      "typescript": "5.8.2"
+    }
+  }
+}

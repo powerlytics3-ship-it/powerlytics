@@ -1,0 +1,20 @@
+{
+  "name": "@powerlytic/config",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./eslint": "./eslint.config.mjs"
+  },
+  "scripts": {
+    "build": "echo \"config package\"",
+    "lint": "echo \"config package\"",
+    "test": "echo \"config package\"",
+    "typecheck": "echo \"config package\""
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.21.0",
+    "eslint": "^9.21.0",
+    "typescript-eslint": "^8.25.0"
+  }
+}

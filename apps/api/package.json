@@ -1,0 +1,42 @@
+{
+  "name": "@powerlytic/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nest start --watch",
+    "build": "nest build",
+    "start": "node dist/apps/api/src/main.js",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.0.11",
+    "@nestjs/config": "^4.0.1",
+    "@nestjs/core": "^11.0.11",
+    "@nestjs/platform-express": "^11.0.11",
+    "@nestjs/swagger": "^11.0.6",
+    "@powerlytic/authz": "workspace:*",
+    "@powerlytic/types": "workspace:*",
+    "@powerlytic/validators": "workspace:*",
+    "@prisma/client": "^6.4.1",
+    "axios": "^1.8.2",
+    "bullmq": "^5.41.2",
+    "helmet": "^8.0.0",
+    "ioredis": "^5.5.0",
+    "jose": "^5.9.6",
+    "mqtt": "^5.10.4",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.5",
+    "@types/node": "^22.13.9",
+    "eslint": "^9.21.0",
+    "supertest": "^7.0.0",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.8"
+  }
+}

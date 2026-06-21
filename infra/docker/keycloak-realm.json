@@ -1,0 +1,30 @@
+{
+  "realm": "powerlytic",
+  "enabled": true,
+  "clients": [
+    {
+      "clientId": "powerlytic-web",
+      "enabled": true,
+      "publicClient": true,
+      "redirectUris": ["http://localhost:3000/*"],
+      "webOrigins": ["http://localhost:3000"],
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false
+    },
+    {
+      "clientId": "powerlytic-api",
+      "enabled": true,
+      "bearerOnly": true
+    }
+  ],
+  "roles": {
+    "realm": [
+      { "name": "SUPER_ADMIN" },
+      { "name": "ENGINEERING_ADMIN" },
+      { "name": "MANUFACTURER" },
+      { "name": "WORKSPACE_ADMIN" },
+      { "name": "OPERATOR" },
+      { "name": "VIEWER" }
+    ]
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "noEmit": true,
+    "noUncheckedIndexedAccess": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "baseUrl": ".",
+    "paths": {
+      "@powerlytic/types": ["packages/types/src/index.ts"],
+      "@powerlytic/validators": ["packages/validators/src/index.ts"],
+      "@powerlytic/authz": ["packages/authz/src/index.ts"],
+      "@powerlytic/ui": ["packages/ui/src/index.ts"]
+    }
+  }
+}
