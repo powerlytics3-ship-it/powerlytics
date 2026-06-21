@@ -13,6 +13,7 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md,css,yml,yaml}\"",
     "db:generate": "pnpm --filter @powerlytic/db db:generate",
     "db:migrate": "pnpm --filter @powerlytic/db db:migrate",
+    "db:deploy": "pnpm --filter @powerlytic/db db:deploy",
     "db:seed": "pnpm --filter @powerlytic/db db:seed"
   },
   "devDependencies": {
