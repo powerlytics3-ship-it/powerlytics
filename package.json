@@ -12,8 +12,10 @@
     "typecheck": "turbo typecheck",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md,css,yml,yaml}\"",
     "db:generate": "pnpm --filter @powerlytic/db db:generate",
-    "db:migrate": "pnpm --filter @powerlytic/db db:migrate",
-    "db:seed": "pnpm --filter @powerlytic/db db:seed"
+    "db:push": "DATABASE_URL=${DATABASE_URL:-postgresql://powerlytic:powerlytic@localhost:5432/powerlytic} pnpm --filter @powerlytic/db db:push",
+    "db:migrate": "DATABASE_URL=${DATABASE_URL:-postgresql://powerlytic:powerlytic@localhost:5432/powerlytic} pnpm --filter @powerlytic/db db:migrate",
+    "db:deploy": "pnpm --filter @powerlytic/db db:deploy",
+    "db:seed": "DATABASE_URL=${DATABASE_URL:-postgresql://powerlytic:powerlytic@localhost:5432/powerlytic} pnpm --filter @powerlytic/db db:seed"
   },
   "devDependencies": {
     "@powerlytic/config": "workspace:*",

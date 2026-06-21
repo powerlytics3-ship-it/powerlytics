@@ -6,10 +6,11 @@
   "scripts": {
     "build": "prisma generate",
     "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate dev --schema prisma/schema.prisma",
+    "db:push": "DATABASE_URL=${DATABASE_URL:-postgresql://powerlytic:powerlytic@localhost:5432/powerlytic} prisma db push --schema prisma/schema.prisma",
+    "db:migrate": "DATABASE_URL=${DATABASE_URL:-postgresql://powerlytic:powerlytic@localhost:5432/powerlytic} prisma migrate dev --schema prisma/schema.prisma",
     "db:deploy": "prisma migrate deploy --schema prisma/schema.prisma",
-    "db:seed": "tsx prisma/seed.ts",
-    "lint": "prisma validate --schema prisma/schema.prisma",
+    "db:seed": "DATABASE_URL=${DATABASE_URL:-postgresql://powerlytic:powerlytic@localhost:5432/powerlytic} tsx prisma/seed.ts",
+    "lint": "DATABASE_URL=${DATABASE_URL:-postgresql://powerlytic:powerlytic@localhost:5432/powerlytic} prisma validate --schema prisma/schema.prisma",
     "test": "echo \"db: no tests\"",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
