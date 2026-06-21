@@ -1,18 +1,21 @@
-# Powerlytic Setup Guide: Database, Auth, Redis, and EMQX Wrapper
+# Powerlytic Setup Guide: Codespaces, Local Services, and Deployment
 
-This guide is written for a first-time setup. Follow it in order. Do not enable all production flags at once; turn them on one by one after each dependency works.
+This guide is written for first-time setup from GitHub Codespaces or a local machine. Follow it in order. Do **not** enable all production flags at once; turn on each dependency after the previous one works.
 
-## 1. What Each Third-Party Service Does
+## 1. What Runs Where
 
-| Service | Why Powerlytic uses it | Required now? |
-| --- | --- | --- |
-| Postgres + TimescaleDB | Stores users, organizations, devices, configs, telemetry, alerts, audit logs | Yes for real data |
-| Keycloak | Handles login, password, email verification, roles, OIDC tokens | Yes for real auth |
-| Redis | Runs background jobs through BullMQ for config delivery, alert evaluation, actuation delivery | Optional at first, recommended |
-| EMQX HTTPS wrapper | Your existing service that receives HTTPS config payload and publishes to MQTT | Yes if this is your current device delivery path |
-| MQTT direct | API/worker can publish directly to MQTT broker | Optional; keep disabled if wrapper handles MQTT |
+| Part                   | Local/Codespaces                                | Production recommendation                                                               |
+| ---------------------- | ----------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Web app (`apps/web`)   | Next.js dev server on port `3000`               | Vercel project connected to this repo                                                   |
+| API (`apps/api`)       | NestJS dev server on port `4000`                | GCP Cloud Run or GKE service                                                            |
+| Postgres + TimescaleDB | Docker Compose container                        | Managed database if possible; otherwise a stateful VM/GKE workload with persistent disk |
+| Redis                  | Docker Compose container                        | Memorystore for Redis or a managed Redis provider                                       |
+| Keycloak               | Docker Compose container for local auth testing | Managed identity provider or a separately hosted Keycloak service                       |
+| MQTT broker            | Docker Compose Mosquitto for local testing      | EMQX Cloud, a managed broker, or your existing HTTPS-to-MQTT wrapper                    |
 
-## 2. Current Modes
+The Docker Compose stack in this repo is for dependencies, not the main app. In Codespaces you run Postgres/Redis/Keycloak/Mosquitto in containers, and run the web/API from the workspace with `pnpm`.
+
+## 2. Current Backend Data Modes
 
 Powerlytic currently has two backend data modes:
 
@@ -20,7 +23,7 @@ Powerlytic currently has two backend data modes:
 POWERLYTIC_DATA_MODE=demo
 ```
 
-Uses in-memory demo data. Good for checking screens quickly.
+Uses in-memory demo data. Good for checking screens quickly and does not require the database.
 
 ```env
 POWERLYTIC_DATA_MODE=prisma
@@ -28,101 +31,129 @@ POWERLYTIC_DATA_MODE=prisma
 
 Uses Postgres/Timescale through Prisma. This is the real-data mode.
 
-Keep this order:
+Recommended order:
 
-1. Run demo mode.
-2. Start Postgres.
-3. Run migrations and seed.
-4. Switch to `POWERLYTIC_DATA_MODE=prisma`.
-5. Start Keycloak.
-6. Enable `AUTH_REQUIRED=true`.
-7. Add Redis/worker.
-8. Add EMQX wrapper config delivery.
+1. Build the repo.
+2. Run demo mode.
+3. Start Postgres.
+4. Initialize the Prisma schema and seed data.
+5. Switch to `POWERLYTIC_DATA_MODE=prisma`.
+6. Start Keycloak.
+7. Enable `AUTH_REQUIRED=true`.
+8. Add Redis/worker.
+9. Add EMQX wrapper or direct MQTT config delivery.
 
-## 3. Create `.env`
+## 3. Codespaces Quick Start
 
 From the project root:
 
 ```bash
-cd /Users/shubhambarkur/Documents/Codex/2026-06-21/files-mentioned-by-the-user-powerlytics/outputs/powerlytic-codex
+corepack enable
+pnpm install
 cp .env.example .env
 ```
 
-Start with this safe local config:
+Start the dependency containers from the repo root:
+
+```bash
+docker compose -f infra/compose.yaml up -d postgres redis mosquitto keycloak
+```
+
+Wait until Postgres is ready:
+
+```bash
+docker compose -f infra/compose.yaml ps
+```
+
+Generate Prisma Client and initialize the database schema:
+
+```bash
+pnpm db:generate
+pnpm --filter @powerlytic/db exec prisma db push --schema prisma/schema.prisma
+pnpm db:seed
+```
+
+For real-data mode, edit `.env`:
+
+```env
+POWERLYTIC_DATA_MODE=prisma
+DATABASE_URL=postgresql://powerlytic:powerlytic@localhost:5432/powerlytic
+```
+
+Run the API and web in separate terminals:
+
+```bash
+pnpm --filter @powerlytic/api dev
+```
+
+```bash
+pnpm --filter @powerlytic/web dev
+```
+
+In Codespaces, open the forwarded port for the web app (`3000`). If the browser cannot reach the API on `localhost:4000`, copy the forwarded API URL for port `4000` and set both of these in `.env` before restarting the web app:
+
+```env
+PUBLIC_API_BASE_URL=https://<your-4000-forwarded-url>/api
+NEXT_PUBLIC_API_BASE_URL=https://<your-4000-forwarded-url>/api
+```
+
+Keep `AUTH_REQUIRED=false` until Keycloak login is fully configured.
+
+## 4. Local Machine Quick Start
+
+From the project root:
+
+```bash
+corepack enable
+pnpm install
+cp .env.example .env
+docker compose -f infra/compose.yaml up -d postgres redis mosquitto keycloak
+pnpm db:generate
+pnpm --filter @powerlytic/db exec prisma db push --schema prisma/schema.prisma
+pnpm db:seed
+pnpm dev
+```
+
+Default local URLs:
+
+- Web: `http://localhost:3000`
+- API: `http://localhost:4000/api`
+- Swagger: `http://localhost:4000/api/docs`
+- Keycloak: `http://localhost:8080`
+
+## 5. Environment Variables
+
+Start with `.env.example`. The most important local values are:
 
 ```env
 NODE_ENV=development
 API_PORT=4000
-WEB_PORT=3000
-PUBLIC_API_BASE_URL=http://localhost:4000/api
 NEXT_PUBLIC_API_BASE_URL=http://localhost:4000/api
+PUBLIC_API_BASE_URL=http://localhost:4000/api
 WEB_ORIGIN=http://localhost:3000
-
 DATABASE_URL=postgresql://powerlytic:powerlytic@localhost:5432/powerlytic
 POWERLYTIC_DATA_MODE=demo
-
 AUTH_REQUIRED=false
-OIDC_ISSUER_URL=http://localhost:8080/realms/powerlytic
-OIDC_AUDIENCE=powerlytic-api
-OIDC_CLIENT_ID=powerlytic-web
-OIDC_CLIENT_SECRET=change-me
-
 REDIS_URL=redis://localhost:6379
 QUEUE_ENABLED=false
-
 MQTT_ENABLED=false
 MQTT_URL=mqtt://localhost:1883
-MQTT_USERNAME=
-MQTT_PASSWORD=
-MQTT_CLIENT_ID=powerlytic-api
-
-CONFIG_BRIDGE_URL=
-CONFIG_BRIDGE_TOKEN=
-CONFIG_BRIDGE_DIRECT=false
-
 DEVICE_API_KEY_PEPPER=replace-this-with-a-long-random-secret
 ```
 
-## 4. Install Dependencies
+Important URL rule:
+
+- Use `localhost` when the API/worker runs from your machine or Codespaces VM and connects to Compose-published ports.
+- Use Compose service names such as `postgres`, `redis`, `mosquitto`, and `keycloak` only when the API itself is also running inside the same Compose network.
+- Use public managed-service URLs in production.
+
+## 6. Database Initialization
+
+This repository currently has a Prisma schema and seed file. It does not yet include committed migration files, so use `prisma db push` for first-time development databases:
 
 ```bash
-pnpm install
-pnpm build
-```
-
-Expected result: build passes.
-
-## 5. Start Postgres + TimescaleDB
-
-The repo already has Docker Compose:
-
-```bash
-cd infra
-docker compose up -d postgres
-cd ..
-```
-
-Check it is running:
-
-```bash
-docker ps
-```
-
-You should see a Timescale/Postgres container.
-
-Your local `DATABASE_URL` should be:
-
-```env
-DATABASE_URL=postgresql://powerlytic:powerlytic@localhost:5432/powerlytic
-```
-
-## 6. Run Database Migration and Seed
-
-From project root:
-
-```bash
-pnpm --filter @powerlytic/db db:migrate
-pnpm --filter @powerlytic/db db:seed
+pnpm --filter @powerlytic/db exec prisma db push --schema prisma/schema.prisma
+pnpm db:seed
 ```
 
 The seed creates:
@@ -134,40 +165,23 @@ The seed creates:
 - demo model: `Edge Monitor 100`
 - demo device: `Boiler Room Monitor`
 
-Now switch `.env`:
-
-```env
-POWERLYTIC_DATA_MODE=prisma
-```
-
-Run API:
+For production, create and review Prisma migrations before deploying schema changes:
 
 ```bash
-pnpm --filter @powerlytic/api start
+pnpm --filter @powerlytic/db exec prisma migrate dev --schema prisma/schema.prisma --name init
 ```
 
-Test:
+Commit the generated `packages/db/prisma/migrations/**` files before using production migration deployment.
+
+## 7. Keycloak Local Auth
+
+Start Keycloak:
 
 ```bash
-curl http://localhost:4000/api/health
-curl http://localhost:4000/api/devices
+docker compose -f infra/compose.yaml up -d keycloak
 ```
 
-## 7. Start Keycloak
-
-Start Keycloak from Docker Compose:
-
-```bash
-cd infra
-docker compose up -d keycloak
-cd ..
-```
-
-Open:
-
-```text
-http://localhost:8080
-```
+Open `http://localhost:8080`.
 
 Admin login:
 
@@ -176,66 +190,25 @@ username: admin
 password: admin
 ```
 
-The repo imports a realm from:
+The repo imports the realm from `infra/docker/keycloak-realm.json`.
 
-```text
-infra/docker/keycloak-realm.json
-```
-
-Expected realm:
-
-```text
-powerlytic
-```
+Expected realm: `powerlytic`
 
 Expected clients:
 
-```text
-powerlytic-web
-powerlytic-api
-```
+- `powerlytic-web`
+- `powerlytic-api`
 
 Expected roles:
 
-```text
-SUPER_ADMIN
-ENGINEERING_ADMIN
-MANUFACTURER
-WORKSPACE_ADMIN
-OPERATOR
-VIEWER
-```
+- `SUPER_ADMIN`
+- `ENGINEERING_ADMIN`
+- `MANUFACTURER`
+- `WORKSPACE_ADMIN`
+- `OPERATOR`
+- `VIEWER`
 
-## 8. Create Your First Keycloak User
-
-In Keycloak:
-
-1. Select realm `powerlytic`.
-2. Go to `Users`.
-3. Click `Create new user`.
-4. Set email:
-
-```text
-admin@powerlytic.com
-```
-
-5. Turn `Email verified` on for local testing.
-6. Save.
-7. Go to `Credentials`.
-8. Set a password.
-9. Turn `Temporary` off.
-10. Go to `Role mapping`.
-11. Assign `SUPER_ADMIN`.
-
-Important: this email must match the seeded database user:
-
-```text
-admin@powerlytic.com
-```
-
-For real production, also set the Keycloak user subject into `User.externalSub` or add a small first-login linking flow.
-
-## 9. Enable Auth
+Create a local test user with email `admin@powerlytic.com`, mark email verified, set a non-temporary password, and assign `SUPER_ADMIN`. This email must match the seeded database user.
 
 After Keycloak works, update `.env`:
 
@@ -245,245 +218,142 @@ OIDC_ISSUER_URL=http://localhost:8080/realms/powerlytic
 OIDC_AUDIENCE=powerlytic-api
 ```
 
-Important: the backend now validates JWTs and then checks the user against Postgres memberships.
-
-Every human API request must include:
+Every authenticated human API request must include:
 
 ```http
 Authorization: Bearer <keycloak-access-token>
 X-Workspace-Id: ws-platform
 ```
 
-Tenant isolation works like this:
+## 8. Redis, Worker, and Queues
 
-- `SUPER_ADMIN`, `ENGINEERING_ADMIN`, and `MANUFACTURER` are platform-level roles.
-- `WORKSPACE_ADMIN`, `OPERATOR`, and `VIEWER` are organization/workspace roles.
-- Workspace users can only access workspaces in their active memberships.
-- Passing another org's `X-Workspace-Id` will fail.
-
-## 10. OTP / Email / Phone Validation
-
-You asked if OTP is needed.
-
-Recommended:
-
-| Use case | Recommendation |
-| --- | --- |
-| Login MFA | Use Keycloak MFA/OTP, not custom app code |
-| Email verification | Use Keycloak email verification |
-| Phone verification | Optional; add only if phone is used for alerts, SMS login, or compliance |
-| New organization admin invite | Use email invite token first; OTP/MFA can be required in Keycloak |
-| Device auth | Do not use OTP; use device credentials/API keys |
-
-So yes, OTP/MFA is useful for admins, but it should be configured in Keycloak. The app should not build its own password/OTP system unless you have a very specific reason.
-
-For local development you can skip OTP. For production, enable Keycloak MFA for:
-
-- `SUPER_ADMIN`
-- `ENGINEERING_ADMIN`
-- `WORKSPACE_ADMIN`
-
-## 11. Device Credentials
-
-Devices should not use human Keycloak tokens.
-
-Create a device credential:
-
-```bash
-curl -X POST http://localhost:4000/api/devices/dev-demo-1/credentials \
-  -H "Authorization: Bearer <admin-token>" \
-  -H "X-Workspace-Id: ws-platform" \
-  -H "Content-Type: application/json" \
-  -d '{"label":"factory-device-key"}'
-```
-
-The response contains a one-time secret:
-
-```json
-{
-  "secret": "pld_xxxxx"
-}
-```
-
-Store that secret in your device provisioning system. The database stores only a hash.
-
-Device telemetry request:
-
-```bash
-curl -X POST http://localhost:4000/api/values/devices/dev-demo-1 \
-  -H "Authorization: Device <device-secret>" \
-  -H "Content-Type: application/json" \
-  -d '{"values":{"DI_1":1,"AI_1":42.5}}'
-```
-
-The backend checks:
-
-- credential is active
-- credential belongs to the same exact device
-- device belongs to the workspace
-- telemetry is stored under the correct workspace
-
-## 12. Redis and Worker
-
-Redis is used for background jobs.
-
-Start Redis:
-
-```bash
-cd infra
-docker compose up -d redis
-cd ..
-```
-
-Enable queues:
+For first run, keep queues disabled:
 
 ```env
-QUEUE_ENABLED=true
-REDIS_URL=redis://localhost:6379
-```
-
-Start worker:
-
-```bash
-pnpm --filter @powerlytic/worker start
-```
-
-Current worker jobs:
-
-| Queue | Job |
-| --- | --- |
-| `config-deployments` | sends config to bridge/MQTT and marks deployment sent |
-| `alert-evaluation` | evaluates latest telemetry against alert rules |
-| `actuation-delivery` | sends output/control commands |
-
-You can keep `QUEUE_ENABLED=false` at first if you want direct bridge delivery from the API.
-
-## 13. Your EMQX HTTPS Wrapper
-
-You said you already have an EMQX custom wrapper that exposes an HTTPS endpoint. That is supported now.
-
-Use this when you deploy config:
-
-```text
-Powerlytic API -> your HTTPS wrapper -> EMQX/MQTT topic -> device subscriber
-```
-
-Set:
-
-```env
-CONFIG_BRIDGE_DIRECT=true
-CONFIG_BRIDGE_URL=https://your-wrapper-domain.example.com/your/config/endpoint
-CONFIG_BRIDGE_TOKEN=your-wrapper-token-if-needed
-MQTT_ENABLED=false
 QUEUE_ENABLED=false
 ```
 
-The API sends this payload to your wrapper:
+When Redis is running and you want background jobs:
 
-```json
-{
-  "deviceId": "dev-demo-1",
-  "payload": {
-    "message": "config",
-    "hash": "config-hash",
-    "configId": "cfg-demo-1",
-    "config": {
-      "device_id": "dev-demo-1",
-      "configId": "cfg-demo-1",
-      "imei": "867530900001",
-      "modbusSlaves": []
-    }
-  }
-}
+```env
+REDIS_URL=redis://localhost:6379
+QUEUE_ENABLED=true
 ```
 
-If your wrapper expects a different JSON shape, change `sendConfigToHttpsBridge()` in:
+Start the worker separately:
 
-```text
-apps/api/src/production/production-state.service.ts
+```bash
+pnpm --filter @powerlytic/worker dev
 ```
 
-Search:
+In production, deploy the worker as a separate Cloud Run service or GKE workload that uses the same database, Redis, MQTT, and config bridge environment variables as the API.
 
-```text
-sendConfigToHttpsBridge
-```
+## 9. MQTT and EMQX Wrapper
 
-## 14. Direct MQTT Alternative
-
-If later you want Powerlytic to publish MQTT directly, set:
+Local Mosquitto is only for development:
 
 ```env
 MQTT_ENABLED=true
-MQTT_URL=mqtts://your-emqx-broker:8883
-MQTT_USERNAME=your-username
-MQTT_PASSWORD=your-password
-MQTT_CLIENT_ID=powerlytic-api
+MQTT_URL=mqtt://localhost:1883
 ```
 
-Then API/worker publishes to:
+If your devices use an HTTPS wrapper that publishes to EMQX/MQTT, keep direct MQTT disabled and configure the bridge instead:
 
-```text
-powerlytic/devices/{deviceId}/config
-powerlytic/devices/{deviceId}/commands
+```env
+MQTT_ENABLED=false
+CONFIG_BRIDGE_URL=https://<your-wrapper-host>/c2d/commands
+CONFIG_BRIDGE_TOKEN=<secret-token>
+CONFIG_BRIDGE_DIRECT=true
 ```
 
-For now, because you already have an HTTPS wrapper, keep direct MQTT disabled.
+In production, Vercel should never connect directly to MQTT, Redis, or Postgres. Browser traffic goes to the backend API; the API/worker talks to Postgres, Redis, Keycloak/OIDC, and MQTT/bridge.
 
-## 15. Recommended Local Startup Order
+## 10. Deploying Web to Vercel and Backend to GCP
 
-Terminal 1:
+### Vercel frontend
+
+Create a Vercel project with:
+
+- Root directory: `apps/web`
+- Install command: `corepack enable && pnpm install --frozen-lockfile`
+- Build command: `pnpm --filter @powerlytic/web build`
+- Output: Next.js default
+
+Set Vercel environment variables:
+
+```env
+NEXT_PUBLIC_API_BASE_URL=https://<your-api-domain>/api
+PUBLIC_API_BASE_URL=https://<your-api-domain>/api
+```
+
+Use your Cloud Run custom domain or load balancer URL for `<your-api-domain>`.
+
+### GCP backend
+
+Deploy the API to Cloud Run or GKE. Cloud Run is the simplest starting point.
+
+Backend environment variables should use production services:
+
+```env
+NODE_ENV=production
+API_PORT=8080
+WEB_ORIGIN=https://<your-vercel-domain>
+DATABASE_URL=postgresql://<user>:<password>@<host>:5432/<db>?sslmode=require
+POWERLYTIC_DATA_MODE=prisma
+AUTH_REQUIRED=true
+OIDC_ISSUER_URL=https://<your-issuer>/realms/powerlytic
+OIDC_AUDIENCE=powerlytic-api
+REDIS_URL=redis://<redis-host>:6379
+QUEUE_ENABLED=true
+MQTT_ENABLED=false
+CONFIG_BRIDGE_URL=https://<your-wrapper-host>/c2d/commands
+CONFIG_BRIDGE_TOKEN=<secret-token>
+CONFIG_BRIDGE_DIRECT=true
+DEVICE_API_KEY_PEPPER=<secret-manager-value>
+```
+
+Do not use the Compose Postgres volume for production. A containerized local Postgres volume is disposable developer infrastructure; production data belongs in Cloud SQL-compatible Postgres with Timescale support, Timescale Cloud, AlloyDB/Postgres if Timescale features are not required, or a carefully managed stateful deployment.
+
+### Production migration flow
+
+Use one release job or manual step before rolling out a new API version:
 
 ```bash
-cd infra
-docker compose up -d postgres keycloak redis
+pnpm --filter @powerlytic/db db:deploy
 ```
 
-Terminal 2:
+This requires committed migration files. Until migrations are committed, do not rely on production automatic migration deployment.
+
+## 11. Troubleshooting Common Build/Run Errors
+
+### `cp .env.example .env` fails
+
+Pull the latest code. The root `.env.example` file should exist. If it does not, create it from this guide.
+
+### API cannot connect to Postgres
+
+Check the Compose services:
 
 ```bash
-pnpm --filter @powerlytic/api start
+docker compose -f infra/compose.yaml ps
 ```
 
-Terminal 3:
+If API runs from the host or Codespaces VM, `DATABASE_URL` should use `localhost:5432`, not `postgres:5432`.
+
+### Browser cannot reach API from Codespaces
+
+Use the forwarded public URL for port `4000` in `NEXT_PUBLIC_API_BASE_URL` and restart `apps/web`.
+
+### `pnpm db:migrate` asks questions or fails on a fresh setup
+
+Use `prisma db push` for a disposable development database:
 
 ```bash
-pnpm --filter @powerlytic/web start
+pnpm --filter @powerlytic/db exec prisma db push --schema prisma/schema.prisma
 ```
 
-Terminal 4, only if queues are enabled:
+Create reviewed migrations before production deployment.
 
-```bash
-pnpm --filter @powerlytic/worker start
-```
+### Build warnings about Turbo outputs
 
-Open:
-
-```text
-http://localhost:3000
-```
-
-## 16. Security Checklist Before Real Use
-
-- [ ] `POWERLYTIC_DATA_MODE=prisma`
-- [ ] `AUTH_REQUIRED=true`
-- [ ] Keycloak users exist and emails match database users
-- [ ] Every customer user has a `Membership` row
-- [ ] Every request sends `X-Workspace-Id`
-- [ ] `DEVICE_API_KEY_PEPPER` is a real secret
-- [ ] Device credentials are created and stored securely
-- [ ] `CONFIG_BRIDGE_TOKEN` is set if your wrapper requires auth
-- [ ] `WEB_ORIGIN` is set to your real frontend domain
-- [ ] Demo mode is disabled in production
-
-## 17. What Is Still Not Fully Finished
-
-These are intentionally left as integration tasks because they require your real providers:
-
-- Web login is still a UI shell; it needs a real Keycloak/OIDC frontend session library.
-- Keycloak email sending must be configured with your SMTP provider.
-- Phone OTP/SMS is not configured; use Keycloak or an SMS provider if needed.
-- Config bridge payload may need small shape changes to match your EMQX wrapper.
-- Frontend forms mostly render but not every modal posts real mutations yet.
-- Production deployment needs secrets from your hosting environment.
-
+The current build may warn that type-only packages have no output files. That warning is not a failed build if the command exits with status `0`.
