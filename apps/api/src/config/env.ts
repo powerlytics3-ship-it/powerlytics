@@ -17,10 +17,10 @@ export const configTodos = {
   redisUrl: "REDIS_URL",
   // TODO: add real MQTT broker URL in MQTT_URL if devices use MQTT.
   mqttUrl: "MQTT_URL",
-  // TODO: add real OIDC issuer URL from Keycloak/Auth0/Cognito/etc.
-  oidcIssuerUrl: "OIDC_ISSUER_URL",
-  // TODO: add API audience/client ID expected inside access tokens.
-  oidcAudience: "OIDC_AUDIENCE",
+  // TODO: add secure Auth.js signing secret in NEXTAUTH_SECRET.
+  nextAuthSecret: "NEXTAUTH_SECRET",
+  // TODO: add internal API token signing secret in AUTH_TOKEN_SECRET.
+  authTokenSecret: "AUTH_TOKEN_SECRET",
   // TODO: add a KMS/secret-manager value used when hashing device API keys.
   deviceApiKeyPepper: "DEVICE_API_KEY_PEPPER",
   // TODO: add bridge URL if config/command delivery is HTTP instead of MQTT.

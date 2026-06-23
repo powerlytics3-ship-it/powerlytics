@@ -1,9 +1,11 @@
 import { AppShell, PageHeader, Panel } from "../../components/app-shell";
 import { DataTable } from "../../components/table";
 import { SelectField, TextField } from "../../components/ui";
-import { auditLogs } from "../../lib/mock-data";
+import { apiGet } from "../../lib/api";
 
-export default function AuditPage() {
+export default async function AuditPage() {
+  const auditLogs = await apiGet<Array<Record<string, unknown>>>("/audit-logs", []);
+
   return (
     <AppShell>
       <PageHeader title="Audit Log" description="Sensitive workspace, device, deployment, and actuation operations are traceable." />
@@ -25,8 +27,8 @@ export default function AuditPage() {
               { key: "action", header: "Action" },
               { key: "resource", header: "Resource" },
               { key: "resourceId", header: "Resource ID" },
-              { key: "actor", header: "Actor" },
-              { key: "workspace", header: "Workspace" }
+              { key: "actorId", header: "Actor" },
+              { key: "workspaceId", header: "Workspace" }
             ]}
           />
         </Panel>

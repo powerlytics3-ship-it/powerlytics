@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
+const ADMIN_PASSWORD_HASH = "$2b$10$klEJET7dYDncvdztsmQT1.FxUU8mJM4.GldLG4pG49TIXQU75rSJm";
 
 async function main() {
   const digitalInput = await prisma.portType.upsert({
@@ -68,11 +69,12 @@ async function main() {
 
   const admin = await prisma.user.upsert({
     where: { email: "admin@powerlytic.com" },
-    update: {},
+    update: { password: ADMIN_PASSWORD_HASH },
     create: {
       id: "usr-admin",
       email: "admin@powerlytic.com",
       name: "Platform Admin",
+      password: ADMIN_PASSWORD_HASH,
       active: true
     }
   });

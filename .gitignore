@@ -6,7 +6,10 @@ dist
 coverage
 .env
 .env.local
+.env.*
+!.env.example
 *.log
 apps/api/generated
 packages/db/generated
 cache
+*.har

@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { AppShell, Button, PageHeader, Panel, StatusPill } from "../../components/app-shell";
 import { DataTable } from "../../components/table";
-import { deviceModels } from "../../lib/mock-data";
+import { apiGet } from "../../lib/api";
 
-export default function DeviceModelsPage() {
+export default async function DeviceModelsPage() {
+  const deviceModels = await apiGet<Array<Record<string, unknown>>>("/device-models", []);
+
   return (
     <AppShell>
       <PageHeader
@@ -21,7 +23,7 @@ export default function DeviceModelsPage() {
             { key: "version", header: "Version" },
             { key: "microControllerType", header: "MCU" },
             { key: "status", header: "Status", render: (model) => <StatusPill value={String(model.status)} /> },
-            { key: "ports", header: "Ports", render: (model) => Array.isArray(model.ports) ? model.ports.map((port: any) => port.portKey).join(", ") : "" }
+            { key: "ports", header: "Ports", render: (model) => Array.isArray(model.ports) ? model.ports.map((port: any) => String(port.portKey ?? "")).join(", ") : "" }
           ]}
         />
       </Panel>

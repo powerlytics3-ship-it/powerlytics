@@ -1,15 +1,22 @@
 import { AppShell, PageHeader, Panel } from "../../components/app-shell";
 import { DataTable } from "../../components/table";
 import { SelectField, Tabs, TextField } from "../../components/ui";
-import { devices, telemetryRows } from "../../lib/mock-data";
+import { apiGet } from "../../lib/api";
 
-export default function TelemetryPage() {
+export default async function TelemetryPage() {
+  const devices = await apiGet<Array<Record<string, unknown>>>("/devices", []);
+  const selectedDeviceId = String(devices[0]?.id ?? "");
+  const telemetryResponse = selectedDeviceId
+    ? await apiGet<Record<string, unknown>>(`/devices/${selectedDeviceId}/values`, { data: [] })
+    : { data: [] };
+  const telemetryRows = Array.isArray(telemetryResponse.data) ? (telemetryResponse.data as Array<Record<string, unknown>>) : [];
+
   return (
     <AppShell>
       <PageHeader title="Telemetry" description="Snapshot, table, chart-ready, status, and export views for normalized device values." />
       <Panel title="Filters">
         <div className="grid gap-4 md:grid-cols-4">
-          <SelectField label="Device" options={devices.map((device) => device.name)} />
+          <SelectField label="Device" options={devices.map((device) => String(device.name ?? device.id ?? ""))} />
           <TextField label="Port key" placeholder="AI_1" />
           <TextField label="Start time" placeholder="2026-06-21T00:00:00Z" />
           <TextField label="End time" placeholder="2026-06-22T00:00:00Z" />
@@ -37,7 +44,7 @@ export default function TelemetryPage() {
   );
 }
 
-function TelemetryTable({ title, rows }: { title: string; rows: typeof telemetryRows }) {
+function TelemetryTable({ title, rows }: { title: string; rows: Array<Record<string, unknown>> }) {
   return (
     <Panel title={title}>
       <DataTable
@@ -45,7 +52,7 @@ function TelemetryTable({ title, rows }: { title: string; rows: typeof telemetry
         rowKey={(row) => String(row.id)}
         columns={[
           { key: "ts", header: "Timestamp" },
-          { key: "label", header: "Signal" },
+          { key: "portKey", header: "Signal" },
           { key: "portKey", header: "Port" },
           { key: "rawValue", header: "Raw" },
           { key: "calibratedValue", header: "Calibrated", render: (row) => `${String(row.calibratedValue)} ${String(row.unit ?? "")}` },

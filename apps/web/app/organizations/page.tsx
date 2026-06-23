@@ -1,9 +1,12 @@
 import Link from "next/link";
 import { AppShell, Button, PageHeader, Panel, StatusPill } from "../../components/app-shell";
 import { DataTable } from "../../components/table";
-import { users, workspaces } from "../../lib/mock-data";
+import { apiGet } from "../../lib/api";
 
-export default function OrganizationsPage() {
+export default async function OrganizationsPage() {
+  const workspaces = await apiGet<Array<Record<string, unknown>>>("/workspaces", []);
+  const users = await apiGet<Array<Record<string, unknown>>>("/users", []);
+
   return (
     <AppShell>
       <PageHeader
@@ -21,7 +24,11 @@ export default function OrganizationsPage() {
             { key: "industry", header: "Industry" },
             { key: "timezone", header: "Timezone" },
             { key: "status", header: "Status", render: (workspace) => <StatusPill value={String(workspace.status)} /> },
-            { key: "id", header: "Members", render: (workspace) => users.filter((user) => user.workspaceId === workspace.id).length }
+            {
+              key: "id",
+              header: "Members",
+              render: (workspace) => users.filter((user) => Array.isArray(user.memberships) && (user.memberships as Array<Record<string, unknown>>).some((m) => String(m.workspaceId) === String(workspace.id))).length
+            }
           ]}
         />
       </Panel>

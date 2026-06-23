@@ -37,21 +37,64 @@ export function DataTable<T extends Record<string, unknown>>({
   );
 }
 
-export function TextField({ label, value, placeholder }: { label: string; value?: string; placeholder?: string }) {
+export function TextField({
+  label,
+  name,
+  value,
+  placeholder,
+  type = "text",
+  required = false
+}: {
+  label: string;
+  name?: string;
+  value?: string;
+  placeholder?: string;
+  type?: string;
+  required?: boolean;
+}) {
   return (
     <label className="grid gap-1 text-sm">
       <span className="font-medium text-zinc-700">{label}</span>
-      <input className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-zinc-950 outline-none focus:border-zinc-950" defaultValue={value} placeholder={placeholder} />
+      <input
+        className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-zinc-950 outline-none focus:border-zinc-950"
+        defaultValue={value}
+        name={name}
+        placeholder={placeholder}
+        required={required}
+        type={type}
+      />
     </label>
   );
 }
 
-export function SelectField({ label, options, value }: { label: string; options: string[]; value?: string }) {
+type SelectOption = string | { label: string; value: string };
+
+export function SelectField({
+  label,
+  name,
+  options,
+  value,
+  required = false
+}: {
+  label: string;
+  name?: string;
+  options: SelectOption[];
+  value?: string;
+  required?: boolean;
+}) {
   return (
     <label className="grid gap-1 text-sm">
       <span className="font-medium text-zinc-700">{label}</span>
-      <select className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-zinc-950 outline-none focus:border-zinc-950" defaultValue={value}>
-        {options.map((option) => <option key={option}>{option}</option>)}
+      <select
+        className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-zinc-950 outline-none focus:border-zinc-950"
+        defaultValue={value}
+        name={name}
+        required={required}
+      >
+        {options.map((option) => {
+          const normalized = typeof option === "string" ? { label: option, value: option } : option;
+          return <option key={normalized.value} value={normalized.value}>{normalized.label}</option>;
+        })}
       </select>
     </label>
   );
@@ -70,14 +113,22 @@ export function ModalTrigger({
   label,
   title,
   children,
-  variant = "primary"
+  variant = "primary",
+  onClose
 }: {
   label: string;
   title: string;
   children: React.ReactNode;
   variant?: "primary" | "secondary" | "danger";
+  onClose?: (open: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
+  
+  const handleClose = (isOpen: boolean) => {
+    setOpen(isOpen);
+    onClose?.(isOpen);
+  };
+
   const titleId = `${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-dialog-title`;
   const buttonClass = clsx(
     "inline-flex h-9 items-center justify-center rounded-md px-3 text-sm font-medium",
@@ -88,7 +139,7 @@ export function ModalTrigger({
 
   return (
     <>
-      <button className={buttonClass} onClick={() => setOpen(true)}>{label}</button>
+      <button className={buttonClass} onClick={() => handleClose(true)}>{label}</button>
       {open ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-zinc-950/40 p-4">
           <div
@@ -99,7 +150,7 @@ export function ModalTrigger({
           >
             <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
               <h2 className="text-sm font-semibold text-zinc-950" id={titleId}>{title}</h2>
-              <button className="rounded p-1 hover:bg-zinc-100" onClick={() => setOpen(false)} aria-label="Close">
+              <button className="rounded p-1 hover:bg-zinc-100" onClick={() => handleClose(false)} aria-label="Close">
                 <X size={18} />
               </button>
             </div>

@@ -1,8 +1,16 @@
 import { Zap } from "lucide-react";
 import { Button, Panel } from "../../components/app-shell";
-import { TextField } from "../../components/ui";
+import LoginForm from "./login-form";
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams
+}: {
+  searchParams?: Promise<{ error?: string; callbackUrl?: string }>;
+}) {
+  const resolvedParams = await searchParams;
+  const error = resolvedParams?.error;
+  const callbackUrl = resolvedParams?.callbackUrl || "/dashboard";
+
   return (
     <main className="grid min-h-screen bg-zinc-100 lg:grid-cols-[1fr_460px]">
       <section className="hidden bg-zinc-950 p-10 text-white lg:flex lg:flex-col lg:justify-between">
@@ -17,19 +25,13 @@ export default function LoginPage() {
         </div>
         <div>
           <h1 className="max-w-2xl text-4xl font-semibold">Secure monitoring, configuration, and actuation for field hardware.</h1>
-          <p className="mt-4 max-w-xl text-zinc-300">OIDC-ready identity, workspace-scoped roles, and device credentials keep human access separate from machine trust.</p>
+          <p className="mt-4 max-w-xl text-zinc-300">RBAC-protected access with workspace-scoped roles and device credentials for secure IoT operations.</p>
         </div>
       </section>
       <section className="flex items-center justify-center p-6">
         <div className="w-full max-w-md">
           <Panel title="Sign In">
-            <div className="grid gap-4">
-              <TextField label="Email" value="admin@powerlytic.com" />
-              <TextField label="Password" value="Admin@123" />
-              <Button>Continue</Button>
-              <Button variant="secondary">Continue with Keycloak</Button>
-              <div className="text-sm text-zinc-500">Dev fallback is present for local testing; production login should use OIDC Authorization Code + PKCE.</div>
-            </div>
+            <LoginForm callbackUrl={callbackUrl} error={error} />
           </Panel>
         </div>
       </section>

@@ -9,7 +9,6 @@ services:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./docker/init-timescale.sql:/docker-entrypoint-initdb.d/init-timescale.sql:ro
 
   redis:
     image: redis:7-alpine
@@ -23,17 +22,6 @@ services:
       - "9001:9001"
     volumes:
       - ./docker/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
-
-  keycloak:
-    image: quay.io/keycloak/keycloak:26.1
-    command: start-dev --import-realm
-    environment:
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: admin
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./docker/keycloak-realm.json:/opt/keycloak/data/import/powerlytic-realm.json:ro
 
 volumes:
   postgres-data:

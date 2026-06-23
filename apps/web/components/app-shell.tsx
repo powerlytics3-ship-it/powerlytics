@@ -4,6 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Activity, Bell, Building2, Cpu, FileClock, LayoutDashboard, RadioTower, Settings, ShieldCheck, SlidersHorizontal, Users, Zap } from "lucide-react";
 import { clsx } from "clsx";
+import { UserMenu } from "./user-menu";
+import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
+import type { Session } from "next-auth";
 
 const navItems = [
   { href: "/", label: "Overview", icon: LayoutDashboard },
@@ -22,6 +26,7 @@ const navItems = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { data: session } = useSession();
 
   return (
     <div className="min-h-screen bg-zinc-100">
@@ -61,10 +66,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <div className="text-sm font-semibold text-zinc-950">Platform Control Center</div>
             <div className="text-xs text-zinc-500">Workspace scoped operations and hardware contracts</div>
           </div>
-          <div className="flex items-center gap-2 rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-700">
-            <ShieldCheck size={16} className="text-signal" />
-            OIDC ready
-          </div>
+          <UserMenu session={session} />
         </header>
         <main className="px-4 py-6 lg:px-6">{children}</main>
       </div>

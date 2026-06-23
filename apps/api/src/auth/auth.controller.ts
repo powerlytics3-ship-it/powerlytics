@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from "@nestjs/common";
+import { Body, Controller, Get, Post } from "@nestjs/common";
 import { AppStateService } from "../common/app-state.service.js";
 
 @Controller("auth")
@@ -43,22 +43,5 @@ export class AuthController {
   @Post("logout")
   logout() {
     return { success: true };
-  }
-
-  @Get("oidc/:provider/start")
-  startOidc(@Param("provider") provider: string) {
-    return {
-      provider,
-      authorizationUrl: `${process.env.OIDC_ISSUER_URL ?? "http://localhost:8080/realms/powerlytic"}/protocol/openid-connect/auth`,
-      note: "Frontend should use Authorization Code + PKCE against this provider."
-    };
-  }
-
-  @Get("oidc/:provider/callback")
-  oidcCallback(@Param("provider") provider: string) {
-    return {
-      provider,
-      note: "Exchange the authorization code server-side or through the configured OIDC client."
-    };
   }
 }

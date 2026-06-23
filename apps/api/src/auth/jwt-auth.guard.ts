@@ -1,15 +1,13 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable, UnauthorizedException } from "@nestjs/common";
 import { createHash } from "node:crypto";
-import { createRemoteJWKSet, jwtVerify } from "jose";
 import { Role } from "@powerlytic/types";
+import jwt from "jsonwebtoken";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { RequestUser } from "./current-user.js";
 import { RequestContextService } from "./request-context.service.js";
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
-  private jwks?: ReturnType<typeof createRemoteJWKSet>;
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly context: RequestContextService
@@ -30,7 +28,6 @@ export class JwtAuthGuard implements CanActivate {
       return true;
     }
 
-    // TODO: set AUTH_REQUIRED=true only after OIDC_ISSUER_URL and OIDC_AUDIENCE are correct.
     const request = context.switchToHttp().getRequest<{ headers: Record<string, string | undefined>; user?: RequestUser }>();
     const header = request.headers.authorization;
     const deviceSecret = header?.startsWith("Device ") ? header.slice("Device ".length) : request.headers["x-device-key"];
@@ -57,54 +54,51 @@ export class JwtAuthGuard implements CanActivate {
     const token = header?.startsWith("Bearer ") ? header.slice("Bearer ".length) : undefined;
     if (!token) throw new UnauthorizedException("Missing bearer token");
 
-    const issuer = process.env.OIDC_ISSUER_URL;
-    const audience = process.env.OIDC_AUDIENCE;
-    if (!issuer || !audience) {
-      throw new UnauthorizedException("OIDC issuer/audience is not configured");
+    const tokenSecret = process.env.AUTH_TOKEN_SECRET || process.env.NEXTAUTH_SECRET || "dev-auth-secret";
+    let payload: {
+      sub: string;
+      roles?: Role[];
+      workspaceId?: string;
+      workspaceIds?: string[];
+    };
+
+    try {
+      payload = jwt.verify(token, tokenSecret) as typeof payload;
+    } catch {
+      throw new UnauthorizedException("Invalid or expired token");
     }
 
-    this.jwks ??= createRemoteJWKSet(new URL(`${issuer}/protocol/openid-connect/certs`));
-    const verified = await jwtVerify(token, this.jwks, { issuer, audience });
-    const realmRoles = extractRoles(verified.payload);
-    const sub = String(verified.payload.sub);
-    const email = String(verified.payload.email ?? "");
-    const dbUser = await this.prisma.user.findFirst({
-      where: { OR: [{ externalSub: sub }, ...(email ? [{ email }] : [])] },
+    const dbUser = await this.prisma.user.findUnique({
+      where: { id: payload.sub },
       include: { memberships: { where: { status: "ACTIVE" } } }
     });
     if (!dbUser) {
-      // TODO: decide whether first-login auto-provisioning is allowed for your tenant model.
-      throw new UnauthorizedException("User is authenticated but not provisioned in Powerlytic");
+      throw new UnauthorizedException("User not found");
     }
-    const selectedWorkspaceId = String(request.headers["x-workspace-id"] ?? dbUser.memberships[0]?.workspaceId ?? "");
-    const platformRoles = realmRoles.filter((role) => role === Role.SUPER_ADMIN || role === Role.ENGINEERING_ADMIN || role === Role.MANUFACTURER);
-    const selectedMembership = dbUser.memberships.find((membership) => membership.workspaceId === selectedWorkspaceId);
-    if (!platformRoles.length && !selectedMembership) {
+
+    const selectedWorkspaceId = String(request.headers["x-workspace-id"] ?? payload.workspaceId ?? dbUser.memberships[0]?.workspaceId ?? "");
+    const membership = dbUser.memberships.find((m) => m.workspaceId === selectedWorkspaceId);
+    if (!membership) {
       throw new ForbiddenException("User does not belong to the requested workspace");
     }
+
+    const roles: Role[] = Object.values(Role).includes(membership.role as Role) ? [membership.role as Role] : [];
     request.user = {
       id: dbUser.id,
-      externalSub: sub,
       email: dbUser.email,
-      roles: [...platformRoles, ...(selectedMembership ? [selectedMembership.role as Role] : [])],
+      roles,
       workspaceId: selectedWorkspaceId,
-      workspaceIds: dbUser.memberships.map((membership) => membership.workspaceId),
+      workspaceIds: dbUser.memberships.map((m) => m.workspaceId),
       authType: "human"
     };
+
     this.context.setUser(request.user);
     return true;
   }
 }
 
-function hashDeviceSecret(secret: string) {
-  // TODO: DEVICE_API_KEY_PEPPER must match the API value used during device provisioning.
+function hashDeviceSecret(secret: string): string {
   return createHash("sha256")
     .update(`${process.env.DEVICE_API_KEY_PEPPER ?? "dev-pepper"}:${secret}`)
     .digest("hex");
-}
-
-function extractRoles(payload: Record<string, unknown>): Role[] {
-  const realmAccess = payload.realm_access as { roles?: string[] } | undefined;
-  const roles = realmAccess?.roles ?? [];
-  return roles.filter((role): role is Role => Object.values(Role).includes(role as Role));
 }
