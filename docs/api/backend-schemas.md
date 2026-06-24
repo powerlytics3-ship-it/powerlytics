@@ -1,18 +1,66 @@
-# Backend Schemas And DTOs
+# Backend Schemas and Contracts
 
-Concrete backend schema files live under `apps/api/src/schemas`:
+## Source of truth hierarchy
 
-- `workspace.schema.ts`: workspace, membership, invitation.
-- `device-model.schema.ts`: port type, device model, model version, generated model ports.
-- `device.schema.ts`: device, device port, calibration, thresholds, Modbus slaves and reads.
-- `config-deployment.schema.ts`: bridge-compatible hardware config payload and deployment records.
-- `telemetry.schema.ts`: normalized DI, AI, and Modbus telemetry rows and snapshots.
-- `alert-actuation.schema.ts`: alert rules, alert incidents, and actuation commands.
+1. Persistence schema: `packages/db/prisma/schema.prisma`
+2. Input contracts: `packages/validators/src/index.ts`
+3. API-facing route shapes: controllers in `apps/api/src/**`
+4. Internal response helpers: mappers in `apps/api/src/production/production-state.service.ts`
 
-Swagger DTO classes live under `apps/api/src/dto`:
+## 1. Prisma persistence model
 
-- `workspace.dto.ts`
-- `device.dto.ts`
-- `telemetry.dto.ts`
+Main model groups:
 
-The database schema remains the source of persistence truth in `packages/db/prisma/schema.prisma`; the Zod schemas are request/record contracts used by services, tests, and future repositories.
+- Identity: `User`, `Account`, `Session`, `VerificationToken`
+- Tenancy: `Workspace`, `Membership`, `Invitation`
+- Hardware catalog: `PortType`, `DeviceModel`, `DeviceModelVersion`, `DeviceModelPort`
+- Fleet: `Device`, `DevicePort`, `ModbusSlave`, `ModbusRead`, `DeviceCredential`, `DeviceLifecycleEvent`
+- Operations: `ConfigDeployment`, `TelemetryValue`, `AlertRule`, `AlertIncident`, `ActuationCommand`, `AuditLog`
+
+## 2. Zod validation contracts
+
+API controllers parse request bodies with shared Zod schemas from `@powerlytic/validators`.
+
+Representative schemas:
+
+- Workspace/invitation: `workspaceSchema`, `invitationSchema`
+- Device lifecycle: `manufactureDeviceSchema`, `claimDeviceSchema`, `updateDeviceSchema`
+- Telemetry: `telemetryIngestSchema`
+- Alerts/actuation: `createAlertRuleSchema`, `createActuationSchema`
+- Config callback: `deploymentStatusCallbackSchema`
+
+## 3. API schema files in Nest app
+
+`apps/api/src/schemas` contains domain record schemas used in API internals:
+
+- `workspace.schema.ts`
+- `device-model.schema.ts`
+- `device.schema.ts`
+- `config-deployment.schema.ts`
+- `telemetry.schema.ts`
+- `alert-actuation.schema.ts`
+
+These are useful for documenting record shapes and cross-domain consistency.
+
+## 4. DTO and mapping behavior
+
+The service layer maps Prisma records to API DTO-like structures in:
+
+- `deviceDto(...)` in `apps/api/src/production/production-state.service.ts`
+- `modelVersionDto(...)` in `apps/api/src/production/production-state.service.ts`
+
+Examples of mapped concerns:
+
+- Modbus nested topology (`modbusSlaves` -> `reads`)
+- Device calibration and thresholds
+- Published/deprecated model version timestamps
+
+## 5. Compatibility payloads
+
+Legacy contracts intentionally preserved:
+
+- Telemetry legacy route payload (`POST /api/values/devices/:deviceId`)
+- Device config payload (`GET /api/device/:id/config`)
+- Deployment callback status updates (`PUT /api/device/:id/deployment-status`)
+
+The same internal services back both canonical and legacy routes.

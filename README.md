@@ -39,7 +39,11 @@ pnpm db:migrate
 
 ## Important Docs
 
-- [Discovery and Architecture](docs/architecture/phase-0-discovery.md)
+- [Documentation Home](docs/README.md)
+- [New Developer Guide](docs/onboarding/new-developer-guide.md)
+- [System Overview](docs/architecture/system-overview.md)
+- [Request Flows](docs/architecture/request-flows.md)
+- [Entity Relationships](docs/architecture/entity-relationship.md)
 - [API Contract](docs/api/api-contract.md)
-- [Migration Checklist](docs/migration/compatibility-checklist.md)
 - [Operations Runbook](docs/operations/runbook.md)
+- [Deployment Guide](docs/operations/deployment.md)

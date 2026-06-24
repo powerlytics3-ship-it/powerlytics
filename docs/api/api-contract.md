@@ -1,98 +1,193 @@
-# Powerlytic API Contract
+# API Contract
 
-## Auth
+Global prefix: `/api`
+
+Swagger: `/api/docs`
+
+## Authentication model
+
+API accepts:
+
+- Human bearer token: `Authorization: Bearer <jwt>`
+- Device key: `Authorization: Device <secret>` or `x-device-key: <secret>`
+
+For human requests, send `x-workspace-id` for tenant scoping.
+
+## Permission model
+
+Route-level authorization uses `@RequirePermission(...)` with permissions from `@powerlytic/authz`.
+
+Main permission keys:
+
+- `workspace:read`, `workspace:manage`, `membership:manage`
+- `device_model:read`, `device_model:manage`
+- `device:manufacture`, `device:read`, `device:manage`, `device:claim`, `device:deploy_config`
+- `telemetry:read`, `telemetry:ingest`
+- `alert:manage`, `actuation:create`, `audit:read`
+
+## Endpoint inventory
+
+### Health
+
+- `GET /api/health`
+- `GET /api/health/ready`
+
+### Auth
 
 - `GET /api/auth/me`
+- `POST /api/auth/login`
+- `POST /api/auth/refresh`
+- `POST /api/auth/request-reset`
+- `POST /api/auth/reset-password`
 - `POST /api/auth/logout`
-- `GET /api/auth/oidc/:provider/start`
-- `GET /api/auth/oidc/:provider/callback`
 
-Human users authenticate through OIDC. The backend validates access tokens and maps the external subject to an application `User` and active `Membership`.
+### Workspaces and Organizations
 
-## Workspaces And Organizations
+- `GET /api/workspaces` (`workspace:read`)
+- `POST /api/workspaces` (`workspace:manage`)
+- `GET /api/workspaces/:workspaceId` (`workspace:read`)
+- `GET /api/workspaces/:workspaceId/memberships` (`membership:manage`)
+- `POST /api/workspaces/:workspaceId/invitations` (`membership:manage`)
+- `GET /api/workspaces/:workspaceId/invitations` (`membership:manage`)
+- `DELETE /api/workspaces/:workspaceId/memberships/:membershipId` (`membership:manage`)
 
-- `GET /api/workspaces`
-- `POST /api/workspaces`
-- `GET /api/workspaces/:workspaceId`
-- `POST /api/workspaces/:workspaceId/invitations`
-- `GET /api/workspaces/:workspaceId/memberships`
-- `DELETE /api/workspaces/:workspaceId/memberships/:membershipId`
+Organization aliases:
+
 - `GET /api/organizations`
 - `POST /api/organizations`
 - `GET /api/organizations/:orgId`
 
-Organizations are compatibility-facing names for B2B workspaces.
+### Users
 
-## Port Types
+- `GET /api/users` (`membership:manage`)
+- `GET /api/users/org/:orgID` (`membership:manage`)
+- `GET /api/users/:id` (`membership:manage`)
+- `POST /api/users` (`membership:manage`)
+- `PUT /api/users/:id` (`membership:manage`)
+- `DELETE /api/users/:id` (`membership:manage`)
 
-- `GET /api/port-types`
-- `POST /api/port-types`
-- `GET /api/port-types/:id`
-- `PUT /api/port-types/:id`
-- `POST /api/port-types/:id/deactivate`
+Registration helpers:
 
-## Device Models
+- `POST /api/users/register-company-admin`
+- `POST /api/users/register-organization`
+- `POST /api/users/register-org-user`
 
-- `GET /api/device-models`
-- `POST /api/device-models`
-- `GET /api/device-models/:modelId`
-- `POST /api/device-models/:modelId/publish`
-- `POST /api/device-models/:modelId/new-version`
-- `POST /api/device-models/:modelId/deprecate`
+### Port Types
 
-Published model versions are immutable.
+- `GET /api/port-types` (`device_model:read`)
+- `POST /api/port-types` (`device_model:manage`)
+- `GET /api/port-types/:id` (`device_model:read`)
+- `PUT /api/port-types/:id` (`device_model:manage`)
+- `POST /api/port-types/:id/deactivate` (`device_model:manage`)
+- `DELETE /api/port-types/:id` (`device_model:manage`)
 
-## Devices
+### Device Models
 
-- `GET /api/devices`
-- `POST /api/devices/manufacture`
-- `GET /api/devices/inventory`
-- `GET /api/devices/:deviceId`
-- `POST /api/devices/claim`
-- `POST /api/devices/:deviceId/transfer`
-- `PATCH /api/devices/:deviceId`
-- `GET /api/devices/:deviceId/config`
-- `POST /api/devices/:deviceId/config/deploy`
-- `GET /api/devices/:deviceId/config/deployments`
-- `PUT /api/devices/:deviceId/config/deployments/current/status`
+- `GET /api/device-models` (`device_model:read`)
+- `POST /api/device-models` (`device_model:manage`)
+- `GET /api/device-models/:modelId` (`device_model:read`)
+- `POST /api/device-models/:modelId/publish` (`device_model:manage`)
+- `POST /api/device-models/:modelId/new-version` (`device_model:manage`)
+- `POST /api/device-models/:modelId/deprecate` (`device_model:manage`)
+- `DELETE /api/device-models/:modelId` (`device_model:manage`)
 
-Legacy aliases:
+### Devices
+
+- `GET /api/devices` (`device:read`)
+- `POST /api/devices/manufacture` (`device:manufacture`)
+- `GET /api/devices/inventory` (`device:read`)
+- `POST /api/devices/claim` (`device:claim`)
+- `GET /api/devices/:deviceId` (`device:read`)
+- `PATCH /api/devices/:deviceId` (`device:manage`)
+- `DELETE /api/devices/:deviceId` (`device:manage`)
+- `POST /api/devices/:deviceId/transfer` (`device:manage`)
+- `GET /api/devices/:deviceId/config` (`device:read`)
+- `POST /api/devices/:deviceId/config/deploy` (`device:deploy_config`)
+- `GET /api/devices/:deviceId/config/deployments` (`device:read`)
+- `GET /api/devices/:deviceId/config/deployments/:deploymentId` (`device:read`)
+- `PUT /api/devices/:deviceId/config/deployments/current/status` (callback)
+- `GET /api/devices/:deviceId/credentials` (`device:manage`)
+- `POST /api/devices/:deviceId/credentials` (`device:manage`)
+- `POST /api/devices/:deviceId/credentials/:credentialId/revoke` (`device:manage`)
+- `GET /api/devices/:deviceId/lifecycle-events` (`device:read`)
+
+Legacy compatibility routes:
 
 - `GET /api/device/:id/config`
 - `POST /api/device/:id/deploy`
 - `GET /api/device/:id/deployment-status`
 - `PUT /api/device/:id/deployment-status`
 
-## Telemetry
+### Telemetry
 
-- `POST /api/telemetry/devices/:deviceId/values`
-- `GET /api/devices/:deviceId/values`
-- `GET /api/devices/:deviceId/values/latest`
+- `POST /api/telemetry/devices/:deviceId/values` (`telemetry:ingest`)
+- `POST /api/values/devices/:deviceId` (`telemetry:ingest`, legacy alias)
+- `GET /api/devices/:deviceId/values` (`telemetry:read`)
+- `GET /api/devices/:deviceId/values/latest` (`telemetry:read`)
 - `GET /api/devices/:deviceId/values/snapshot`
 - `GET /api/devices/:deviceId/values/table`
 - `GET /api/devices/:deviceId/values/timeseries/:portKey`
 - `GET /api/devices/:deviceId/values/timeseries/modbus/:readId`
-- `GET /api/devices/:deviceId/values/stats/:portKey`
-- `GET /api/devices/:deviceId/values/status`
+- `GET /api/devices/:deviceId/values/stats/:portKey` (`telemetry:read`)
+- `GET /api/devices/:deviceId/values/status` (`telemetry:read`)
 - `GET /api/devices/:deviceId/values/export`
 
-Legacy alias:
+### Alerts
 
-- `POST /api/values/devices/:deviceId`
+- `GET /api/alert-rules` (`telemetry:read`)
+- `POST /api/alert-rules` (`alert:manage`)
+- `GET /api/alert-rules/:id` (`telemetry:read`)
+- `PUT /api/alert-rules/:id` (`alert:manage`)
+- `POST /api/alert-rules/:id/deactivate` (`alert:manage`)
+- `GET /api/alert-incidents` (`telemetry:read`)
+- `GET /api/alert-incidents/:id` (`telemetry:read`)
+- `POST /api/alert-incidents/:id/ack` (`alert:manage`)
+- `POST /api/alert-incidents/:id/resolve` (`alert:manage`)
 
-## Alerts
+Legacy incident aliases:
 
-- `GET /api/alert-rules`
-- `POST /api/alert-rules`
-- `GET /api/alert-incidents`
-- `POST /api/alert-incidents/:id/ack`
-- `POST /api/alert-incidents/:id/resolve`
+- `POST /api/alerts`
+- `GET /api/alerts`
+- `GET /api/alerts/:id`
+- `PUT /api/alerts/:id`
 
-## Actuation
+### Actuations
 
-- `POST /api/devices/:deviceId/actuations`
-- `GET /api/devices/:deviceId/actuations`
-- `POST /api/devices/:deviceId/actuations/:actuationId/cancel`
-- `POST /api/devices/:deviceId/actuations/:actuationId/retry`
+- `GET /api/devices/:deviceId/actuations` (`actuation:create`)
+- `POST /api/devices/:deviceId/actuations` (`actuation:create`)
+- `GET /api/devices/:deviceId/actuations/:actuationId` (`actuation:create`)
+- `POST /api/devices/:deviceId/actuations/:actuationId/cancel` (`actuation:create`)
+- `POST /api/devices/:deviceId/actuations/:actuationId/retry` (`actuation:create`)
 
-Actuation commands are persisted, audited, queued, acknowledged asynchronously, and never executed as blind synchronous toggles.
+### Audit
+
+- `GET /api/audit-logs` (`audit:read`)
+- `GET /api/organizations/:orgId/audit-logs` (`audit:read`)
+- `GET /api/devices/:deviceId/audit-logs` (`audit:read`)
+
+## Request examples
+
+### Human API request
+
+```bash
+curl -X GET "http://localhost:4000/api/devices" \
+	-H "Authorization: Bearer <token>" \
+	-H "x-workspace-id: ws-platform"
+```
+
+### Device telemetry ingest
+
+```bash
+curl -X POST "http://localhost:4000/api/values/devices/dev-demo-1" \
+	-H "Authorization: Device <device-secret>" \
+	-H "Content-Type: application/json" \
+	-d '{"values":{"DI_1":1,"AI_1":41.7}}'
+```
+
+### Config deploy
+
+```bash
+curl -X POST "http://localhost:4000/api/devices/dev-demo-1/config/deploy" \
+	-H "Authorization: Bearer <token>" \
+	-H "x-workspace-id: ws-platform"
+```

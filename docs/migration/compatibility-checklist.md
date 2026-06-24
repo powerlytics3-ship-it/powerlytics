@@ -1,33 +1,50 @@
-# Migration And Compatibility Checklist
+# Migration and Compatibility Checklist
 
-## Preserved Contracts
+## 1. Contracts preserved for compatibility
 
-- Legacy telemetry route: `POST /api/values/devices/:deviceId`.
-- Canonical telemetry route with same payload: `POST /api/telemetry/devices/:deviceId/values`.
-- Legacy config route: `GET /api/device/:id/config`.
-- Canonical config route: `GET /api/devices/:deviceId/config`.
-- Legacy deploy route: `POST /api/device/:id/deploy`.
-- Canonical deploy route: `POST /api/devices/:deviceId/config/deploy`.
-- Legacy deployment status callback: `PUT /api/device/:id/deployment-status`.
-- Config bridge payload: `{ message: "config", hash, configId, config }`.
+- `POST /api/values/devices/:deviceId` (legacy telemetry ingest)
+- `POST /api/telemetry/devices/:deviceId/values` (canonical ingest)
+- `GET /api/device/:id/config` (legacy config fetch)
+- `GET /api/devices/:deviceId/config` (canonical config fetch)
+- `POST /api/device/:id/deploy` (legacy deploy)
+- `POST /api/devices/:deviceId/config/deploy` (canonical deploy)
+- `PUT /api/device/:id/deployment-status` (legacy deploy status callback)
 
-## Intentional Changes
+Config payload shape remains:
 
-- Device and bridge callbacks require device credentials or a migration bridge credential.
-- Users no longer store one direct organization reference. Access is via memberships.
-- Device manufacturing no longer means customer assignment.
-- Device model updates after publish are blocked. Create a new version instead.
-- Alert and actuation actions are protected and audited.
+```json
+{
+	"message": "config",
+	"hash": "<sha256>",
+	"configId": "cfg-...",
+	"config": { "...": "..." }
+}
+```
 
-## Migration Steps
+## 2. Intentional behavior changes
 
-1. Export Mongo collections: users, organizations, port types, device models, devices, values, alerts.
-2. Import organizations as B2B workspaces.
-3. Import users as profiles, map password users to IdP accounts, then create memberships.
-4. Import port types and normalize code names.
-5. Import device models as model version 1 and mark them published.
-6. Import devices with immutable IMEI/config ID/model version references.
-7. Import embedded port, slave, and read configuration.
-8. Import telemetry into `telemetry_values`, preserving `ts`, `ingestTs`, raw values, calibrated values, units, quality, and raw payloads.
-9. Import alerts as incidents, then create alert rules manually if the historical trigger rule is not recoverable.
-10. Run contract tests against current firmware/bridge samples before cutover.
+- Access control is workspace + role based (memberships), not single-organization ownership.
+- Device credentials are hashed and scoped to device/workspace.
+- Manufacturing and claiming are explicit lifecycle transitions.
+- Alert/actuation are persisted and async-capable via queue/worker.
+
+## 3. Data migration checklist
+
+1. Export legacy users, organizations, models, devices, telemetry, alerts.
+2. Import organizations as `Workspace(kind=ORGANIZATION)`.
+3. Import users, then create `Membership` records per workspace.
+4. Import port catalog into `PortType` (`codeName` uniqueness required).
+5. Import hardware catalog into `DeviceModel` + `DeviceModelVersion` + `DeviceModelPort`.
+6. Import devices with immutable identifiers (`imei`, `configId`) and model version links.
+7. Import port configuration, modbus slaves/reads into normalized child tables.
+8. Import telemetry into `TelemetryValue` preserving timestamps and raw payloads.
+9. Import alert history as `AlertIncident`; define active operating policies as `AlertRule`.
+10. Verify contract tests against firmware/bridge traffic samples.
+
+## 4. Cutover verification
+
+- Health endpoints return OK.
+- Legacy telemetry route still accepts device payloads.
+- Config deploy flow writes `ConfigDeployment` and reaches worker/bridge.
+- Workspace isolation blocks cross-tenant access.
+- Dashboard pages render from API data without fallback mode.
