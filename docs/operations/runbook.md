@@ -109,7 +109,8 @@ Admin seed uses a bcrypt hash from `packages/db/prisma/seed.ts`.
 Set a known local admin password after seeding:
 
 ```bash
-pnpm --filter @powerlytic/web exec node -e "const {PrismaClient}=require('@prisma/client'); const bcrypt=require('bcryptjs'); (async()=>{const prisma=new PrismaClient(); const hash=await bcrypt.hash('Admin1234',10); await prisma.user.update({where:{email:'admin@powerlytic.com'},data:{password:hash}}); await prisma.$disconnect(); console.log('Updated admin@powerlytic.com password to Admin1234');})().catch(async(e)=>{console.error(e); process.exit(1);});"
+"DATABASE_URL="postgresql://powerlytic:powerlytic@localhost:5432/powerlytic" \
+node packages/db/prisma-admin-reset.js"
 ```
 
 ## 5. Start application processes
