@@ -1,0 +1,667 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
+}
+
+// ─── Better Auth Tables ───────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  name          String
+  image         String?
+  platformRole  String?   // "SUPER_ADMIN" | "MANUFACTURER" | null
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  sessions      Session[]
+  accounts      Account[]
+  memberships   WorkspaceMembership[]
+  invitationsSent Invitation[]
+  auditLogEntries AuditLog[]
+  claimedDevices  DeviceClaim[]
+  approvedTransfers DeviceTransfer[] @relation("ApprovedTransfers")
+  requestedTransfers DeviceTransfer[] @relation("RequestedTransfers")
+  deployments     ConfigDeployment[]
+  actuationCommands ActuationCommand[]
+  alertRulesCreated AlertRule[]
+  alertEventsAcknowledged AlertEvent[] @relation("AcknowledgedAlerts")
+
+  @@map("user")
+}
+
+model Session {
+  id                   String   @id @default(cuid())
+  expiresAt            DateTime
+  token                String   @unique
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  ipAddress            String?
+  userAgent            String?
+  userId               String
+  activeOrganizationId String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("verification")
+}
+
+// ─── Workspace & Members ──────────────────────────────────────────────────────
+
+enum WorkspaceType {
+  ORGANIZATION
+  PERSONAL
+}
+
+model Workspace {
+  id           String        @id @default(cuid())
+  type         WorkspaceType @default(PERSONAL)
+  name         String
+  slug         String        @unique
+  legalName    String?
+  billingEmail String?
+  cin          String?
+  address      String?
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  deletedAt    DateTime?
+
+  memberships         WorkspaceMembership[]
+  invitations         Invitation[]
+  devices             Device[]
+  deviceClaims        DeviceClaim[]
+  deviceTransferFrom  DeviceTransfer[] @relation("TransferFrom")
+  deviceTransferTo    DeviceTransfer[] @relation("TransferTo")
+  alertRules          AlertRule[]
+  notificationChannels NotificationChannel[]
+  auditLogEntries     AuditLog[]
+
+  @@map("workspace")
+}
+
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  OPERATOR
+  VIEWER
+}
+
+model WorkspaceMembership {
+  id          String        @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        WorkspaceRole @default(VIEWER)
+  invitedById String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+  @@index([workspaceId, role])
+  @@map("workspace_membership")
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+}
+
+model Invitation {
+  id          String           @id @default(cuid())
+  workspaceId String
+  email       String
+  role        WorkspaceRole    @default(VIEWER)
+  invitedById String
+  status      InvitationStatus @default(PENDING)
+  expiresAt   DateTime
+  createdAt   DateTime         @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invitedBy User      @relation(fields: [invitedById], references: [id])
+
+  @@index([workspaceId, status])
+  @@index([email])
+  @@map("invitation")
+}
+
+// ─── Port Types (Global Taxonomy) ────────────────────────────────────────────
+
+enum PortCategory {
+  INPUT
+  OUTPUT
+}
+
+enum PortValueFormat {
+  ANALOG
+  DIGITAL
+  MODBUS
+  AC_INPUT
+}
+
+model PortType {
+  id          String          @id @default(cuid())
+  name        String          @unique
+  category    PortCategory
+  valueFormat PortValueFormat
+  codeName    String          @unique
+  description String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  deviceModelPorts DeviceModelPort[]
+  devicePorts      DevicePort[]
+
+  @@map("port_type")
+}
+
+// ─── Device Models ────────────────────────────────────────────────────────────
+
+enum DeviceModelStatus {
+  DRAFT
+  PUBLISHED
+  DEPRECATED
+}
+
+model DeviceModel {
+  id                  String            @id @default(cuid())
+  name                String
+  description         String?
+  microControllerType String?
+  status              DeviceModelStatus @default(DRAFT)
+  version             Int               @default(1)
+  familyId            String?
+  supersedesId        String?           @unique
+  publishedAt         DateTime?
+  publishedById       String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  deletedAt           DateTime?
+
+  ports       DeviceModelPort[]
+  devices     Device[]
+  supersedes  DeviceModel?  @relation("ModelVersioning", fields: [supersedesId], references: [id])
+  supersededBy DeviceModel? @relation("ModelVersioning")
+
+  @@map("device_model")
+}
+
+model DeviceModelPort {
+  id                String   @id @default(cuid())
+  deviceModelId     String
+  portKey           String
+  portTypeId        String
+  microControllerPin String?
+  description       String?
+  sortOrder         Int      @default(0)
+  createdAt         DateTime @default(now())
+
+  deviceModel DeviceModel @relation(fields: [deviceModelId], references: [id], onDelete: Cascade)
+  portType    PortType    @relation(fields: [portTypeId], references: [id])
+
+  @@unique([deviceModelId, portKey])
+  @@map("device_model_port")
+}
+
+// ─── Devices ─────────────────────────────────────────────────────────────────
+
+enum DeviceLifecycleStatus {
+  MANUFACTURED
+  CLAIMED
+  ACTIVE
+  DECOMMISSIONED
+}
+
+enum DeviceConnectivityStatus {
+  ONLINE
+  OFFLINE
+  MAINTENANCE
+}
+
+model Device {
+  id                  String                   @id @default(cuid())
+  imei                String                   @unique
+  serialNumber        String                   @unique
+  configId            String                   @unique @default(cuid())
+  name                String?
+  deviceModelId       String
+  workspaceId         String?
+  lifecycleStatus     DeviceLifecycleStatus    @default(MANUFACTURED)
+  connectivityStatus  DeviceConnectivityStatus @default(OFFLINE)
+  lastSeenAt          DateTime?
+  manufacturedAt      DateTime                 @default(now())
+  claimedAt           DateTime?
+  location            Json?
+  metadata            Json?
+  pointOfContact      String?
+  alertEmails         String[]
+  alertPhones         String[]
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+  deletedAt           DateTime?
+
+  deviceModel   DeviceModel  @relation(fields: [deviceModelId], references: [id])
+  workspace     Workspace?   @relation(fields: [workspaceId], references: [id])
+  ports         DevicePort[]
+  credential    DeviceCredential?
+  claims        DeviceClaim[]
+  transfers     DeviceTransfer[]
+  deployments   ConfigDeployment[]
+  telemetry     DeviceTelemetry[]
+  actuations    ActuationCommand[]
+  alertRules    AlertRule[]
+  quarantined   TelemetryQuarantine[]
+
+  @@index([workspaceId])
+  @@index([deviceModelId])
+  @@map("device")
+}
+
+model DevicePort {
+  id           String   @id @default(cuid())
+  deviceId     String
+  portKey      String
+  portTypeId   String
+  displayName  String?
+  unit         String?
+  scaling      Decimal  @default(1) @db.Decimal(18, 6)
+  offset       Decimal  @default(0) @db.Decimal(18, 6)
+  thresholdMin Decimal? @db.Decimal(18, 6)
+  thresholdMax Decimal? @db.Decimal(18, 6)
+  thresholdMessage String?
+  status       String   @default("ACTIVE")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  device       Device              @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  portType     PortType            @relation(fields: [portTypeId], references: [id])
+  modbusSlaves ModbusSlaveConfig[]
+
+  @@unique([deviceId, portKey])
+  @@map("device_port")
+}
+
+enum ModbusParity {
+  NONE
+  EVEN
+  ODD
+}
+
+model ModbusSlaveConfig {
+  id            String       @id @default(cuid())
+  devicePortId  String
+  slaveId       String
+  name          String?
+  baudRate      Int          @default(9600)
+  dataBits      Int          @default(8)
+  stopBits      Int          @default(1)
+  parity        ModbusParity @default(NONE)
+  pollIntervalMs Int         @default(1000)
+  pollTimeoutMs  Int         @default(300)
+  pollRetries    Int         @default(3)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  devicePort DevicePort       @relation(fields: [devicePortId], references: [id], onDelete: Cascade)
+  reads      ModbusReadConfig[]
+
+  @@unique([devicePortId, slaveId])
+  @@map("modbus_slave_config")
+}
+
+enum ModbusFunctionCode {
+  FC_1
+  FC_2
+  FC_3
+  FC_4
+}
+
+enum ModbusRegisterType {
+  COIL
+  DISCRETE
+  HOLDING
+  INPUT
+}
+
+enum ModbusEndianness {
+  ABCD
+  CDAB
+  BADC
+  DCBA
+  NONE
+}
+
+model ModbusReadConfig {
+  id             String             @id @default(cuid())
+  slaveConfigId  String
+  readId         String             @default(cuid())
+  name           String?
+  description    String?
+  functionCode   ModbusFunctionCode
+  registerType   ModbusRegisterType
+  startAddress   Int
+  bitsToRead     Int
+  dataType       String?
+  endianness     ModbusEndianness   @default(ABCD)
+  scaling        Decimal            @default(1) @db.Decimal(18, 6)
+  offset         Decimal            @default(0) @db.Decimal(18, 6)
+  unit           String?
+  tag            String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  slaveConfig ModbusSlaveConfig @relation(fields: [slaveConfigId], references: [id], onDelete: Cascade)
+
+  @@unique([slaveConfigId, readId])
+  @@map("modbus_read_config")
+}
+
+model DeviceCredential {
+  id         String    @id @default(cuid())
+  deviceId   String    @unique
+  keyHash    String
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@map("device_credential")
+}
+
+model DeviceClaim {
+  id          String   @id @default(cuid())
+  deviceId    String
+  workspaceId String
+  claimCode   String   @unique
+  claimedById String
+  claimedAt   DateTime @default(now())
+
+  device    Device    @relation(fields: [deviceId], references: [id])
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  claimedBy User      @relation(fields: [claimedById], references: [id])
+
+  @@map("device_claim")
+}
+
+enum TransferStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  COMPLETED
+}
+
+model DeviceTransfer {
+  id              String         @id @default(cuid())
+  deviceId        String
+  fromWorkspaceId String
+  toWorkspaceId   String
+  requestedById   String
+  approvedById    String?
+  status          TransferStatus @default(PENDING)
+  reason          String?
+  createdAt       DateTime       @default(now())
+  completedAt     DateTime?
+
+  device        Device    @relation(fields: [deviceId], references: [id])
+  fromWorkspace Workspace @relation("TransferFrom", fields: [fromWorkspaceId], references: [id])
+  toWorkspace   Workspace @relation("TransferTo", fields: [toWorkspaceId], references: [id])
+  requestedBy   User      @relation("RequestedTransfers", fields: [requestedById], references: [id])
+  approvedBy    User?     @relation("ApprovedTransfers", fields: [approvedById], references: [id])
+
+  @@index([deviceId])
+  @@map("device_transfer")
+}
+
+// ─── Config Deployment ───────────────────────────────────────────────────────
+
+enum DeploymentStatus {
+  PENDING
+  SENT
+  APPLIED
+  ERROR
+  TIMED_OUT
+}
+
+model ConfigDeployment {
+  id             String           @id @default(cuid())
+  deviceId       String
+  configHash     String
+  configSnapshot Json
+  status         DeploymentStatus @default(PENDING)
+  triggeredById  String
+  errorMessage   String?
+  sentAt         DateTime?
+  acknowledgedAt DateTime?
+  createdAt      DateTime         @default(now())
+
+  device      Device @relation(fields: [deviceId], references: [id])
+  triggeredBy User   @relation(fields: [triggeredById], references: [id])
+
+  @@index([deviceId, createdAt])
+  @@map("config_deployment")
+}
+
+// ─── Telemetry ───────────────────────────────────────────────────────────────
+
+enum TelemetryQuality {
+  GOOD
+  BAD
+  UNCERTAIN
+}
+
+model DeviceTelemetry {
+  id              BigInt           @id @default(autoincrement())
+  deviceId        String
+  workspaceId     String
+  ts              DateTime
+  ingestedAt      DateTime         @default(now())
+  portKey         String
+  portValueFormat PortValueFormat
+  modbusReadId    String?
+  modbusSlaveId   String?
+  rawValue        Decimal          @db.Decimal(18, 6)
+  calibratedValue Decimal          @db.Decimal(18, 6)
+  unit            String?
+  quality         TelemetryQuality @default(GOOD)
+  rawPayload      Json?
+
+  device Device @relation(fields: [deviceId], references: [id])
+
+  @@index([deviceId, ts(sort: Desc)])
+  @@index([deviceId, portKey, ts(sort: Desc)])
+  @@index([workspaceId, ts(sort: Desc)])
+  @@map("device_telemetry")
+}
+
+model TelemetryQuarantine {
+  id         String   @id @default(cuid())
+  deviceId   String
+  reason     String
+  rawPayload Json
+  receivedAt DateTime @default(now())
+
+  device Device @relation(fields: [deviceId], references: [id])
+
+  @@map("telemetry_quarantine")
+}
+
+// ─── Actuation ───────────────────────────────────────────────────────────────
+
+enum ActuationStatus {
+  PENDING
+  SENT
+  ACKED
+  FAILED
+  TIMED_OUT
+}
+
+model ActuationCommand {
+  id               String          @id @default(cuid())
+  deviceId         String
+  portKey          String
+  action           String
+  requestedValue   Json
+  status           ActuationStatus @default(PENDING)
+  idempotencyKey   String          @unique
+  requestedById    String
+  acknowledgedAt   DateTime?
+  failureReason    String?
+  createdAt        DateTime        @default(now())
+
+  device      Device @relation(fields: [deviceId], references: [id])
+  requestedBy User   @relation(fields: [requestedById], references: [id])
+
+  @@index([deviceId, createdAt])
+  @@map("actuation_command")
+}
+
+// ─── Alerting ────────────────────────────────────────────────────────────────
+
+enum AlertCondition {
+  GREATER_THAN
+  LESS_THAN
+  EQUAL
+  NOT_EQUAL
+}
+
+enum AlertSeverity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model AlertRule {
+  id             String         @id @default(cuid())
+  workspaceId    String
+  deviceId       String
+  portKey        String
+  name           String
+  condition      AlertCondition
+  thresholdValue Decimal        @db.Decimal(18, 6)
+  forDurationSec Int            @default(0)
+  severity       AlertSeverity  @default(MEDIUM)
+  isEnabled      Boolean        @default(true)
+  createdById    String
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  deletedAt      DateTime?
+
+  workspace            Workspace             @relation(fields: [workspaceId], references: [id])
+  device               Device                @relation(fields: [deviceId], references: [id])
+  createdBy            User                  @relation(fields: [createdById], references: [id])
+  events               AlertEvent[]
+  notificationChannels NotificationChannel[] @relation("AlertRuleChannels")
+
+  @@index([deviceId, portKey])
+  @@map("alert_rule")
+}
+
+enum AlertEventStatus {
+  NEW
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+model AlertEvent {
+  id               String           @id @default(cuid())
+  alertRuleId      String
+  triggeredAt      DateTime         @default(now())
+  triggerValue     Decimal          @db.Decimal(18, 6)
+  status           AlertEventStatus @default(NEW)
+  acknowledgedById String?
+  acknowledgedAt   DateTime?
+  resolvedAt       DateTime?
+  message          String?
+
+  alertRule        AlertRule @relation(fields: [alertRuleId], references: [id])
+  acknowledgedBy   User?     @relation("AcknowledgedAlerts", fields: [acknowledgedById], references: [id])
+
+  @@index([alertRuleId, triggeredAt])
+  @@map("alert_event")
+}
+
+enum NotificationChannelType {
+  EMAIL
+  SMS
+  WEBHOOK
+}
+
+model NotificationChannel {
+  id          String                  @id @default(cuid())
+  workspaceId String
+  type        NotificationChannelType
+  target      String
+  isEnabled   Boolean                 @default(true)
+  createdAt   DateTime                @default(now())
+
+  workspace Workspace   @relation(fields: [workspaceId], references: [id])
+  rules     AlertRule[] @relation("AlertRuleChannels")
+
+  @@map("notification_channel")
+}
+
+// ─── Audit Log ───────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id          String    @id @default(cuid())
+  workspaceId String?
+  actorUserId String?
+  actorType   String    @default("USER")
+  action      String
+  targetType  String?
+  targetId    String?
+  beforeValue Json?
+  afterValue  Json?
+  ipAddress   String?
+  createdAt   DateTime  @default(now())
+
+  workspace Workspace? @relation(fields: [workspaceId], references: [id])
+  actorUser User?      @relation(fields: [actorUserId], references: [id])
+
+  @@index([workspaceId, createdAt])
+  @@index([targetType, targetId])
+  @@map("audit_log")
+}

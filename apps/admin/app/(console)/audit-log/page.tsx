@@ -1,0 +1,41 @@
+'use client';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '@/lib/api';
+
+export default function AdminAuditLogPage() {
+  const { data } = useQuery({
+    queryKey: ['admin-audit-log'],
+    queryFn: () => api.get<{ data: any[]; total: number }>('/v1/admin/audit-log'),
+  });
+
+  return (
+    <div className="space-y-6">
+      <h1 className="text-2xl font-bold">Platform Audit Log</h1>
+      <div className="bg-white shadow rounded-lg overflow-hidden">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actor</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Workspace</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Target</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200">
+            {data?.data?.map((entry: any) => (
+              <tr key={entry.id}>
+                <td className="px-6 py-4 text-sm font-mono text-purple-700">{entry.action}</td>
+                <td className="px-6 py-4 text-sm text-gray-500">{entry.actorType}</td>
+                <td className="px-6 py-4 text-sm text-gray-500">{entry.workspaceId?.slice(0, 8) ?? 'Platform'}</td>
+                <td className="px-6 py-4 text-sm text-gray-500">{entry.targetType} {entry.targetId?.slice(0, 8)}</td>
+                <td className="px-6 py-4 text-sm text-gray-500">{new Date(entry.createdAt).toLocaleString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!data?.data?.length && <p className="text-center py-8 text-gray-500">No audit entries yet</p>}
+      </div>
+    </div>
+  );
+}

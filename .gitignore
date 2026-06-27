@@ -1,15 +1,50 @@
-.DS_Store
-node_modules
-.turbo
-.next
-dist
-coverage
+# Dependencies
+node_modules/
+jspm_packages/
+web_modules/
+
+# Production build outputs
+dist/
+build/
+.next/
+.nuxt/
+out/
+
+# Environment variables and secrets
 .env
 .env.local
-.env.*
-!.env.example
+.env.development.local
+.env.test.local
+.env.production.local
+*.pem
+
+# Logs
+logs
 *.log
-apps/api/generated
-packages/db/generated
-cache
-*.har
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Diagnostic reports and dumps
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+crash_dump*.json
+
+# Testing and Coverage
+coverage/
+.nyc_output/
+.jest/
+
+# IDEs and Editors
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# Operating System Files
+.DS_Store
+Thumbs.db

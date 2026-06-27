@@ -1,0 +1,49 @@
+{
+  "name": "api",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "build": "nest build",
+    "dev": "nest start --watch",
+    "start:prod": "node dist/main",
+    "lint": "eslint src",
+    "test": "vitest run",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@fastify/static": "^9.1.3",
+    "@nestjs/bullmq": "^11.0.1",
+    "@nestjs/common": "^11.0.5",
+    "@nestjs/config": "^4.0.0",
+    "@nestjs/core": "^11.0.5",
+    "@nestjs/platform-fastify": "^11.0.5",
+    "@nestjs/schedule": "^5.0.1",
+    "@nestjs/swagger": "^8.1.0",
+    "@nestjs/throttler": "^6.3.0",
+    "@powerlytic/permissions": "workspace:*",
+    "@prisma/client": "^6.2.1",
+    "@sentry/node": "^8.48.0",
+    "@upstash/redis": "^1.34.3",
+    "better-auth": "^1.2.5",
+    "bullmq": "^5.40.0",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1",
+    "crypto": "^1.0.1",
+    "fastify": "^5.8.5",
+    "prisma": "^6.2.1",
+    "reflect-metadata": "^0.2.2",
+    "resend": "^4.0.1",
+    "rxjs": "^7.8.1",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.2",
+    "@nestjs/testing": "^11.0.5",
+    "@powerlytic/config": "workspace:*",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.2"
+  }
+}
